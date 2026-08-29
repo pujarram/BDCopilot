@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Hangfire.Core" Version="1.8.14" />
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.14" />
+    <PackageReference Include="Hangfire.PostgreSql" Version="1.20.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BDCopilot.Core\BDCopilot.Core.csproj" />
+    <ProjectReference Include="..\BDCopilot.Infrastructure\BDCopilot.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

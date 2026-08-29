@@ -1,0 +1,110 @@
+<div class="doc">
+  <h2>System architecture</h2>
+  <p class="lede">Two flows share one brain. An indexing pipeline keeps a vector store current with everything in SharePoint and Teams; a query pipeline answers a Teams chat message by reading that same store — but only after checking, for that specific user, that they're allowed to see each source. That check is what makes the rest of this safe to build.</p>
+
+  <figure>
+    <svg viewBox="0 0 1320 500" role="img" aria-label="Diagram of the BD Copilot architecture: an indexing pipeline from SharePoint and Teams files through a document processing service into a shared vector store, and a query pipeline from Teams chat through the Angular app and .NET API, an Entra ID access-control check, the same vector store, a swappable LLM layer, and back to Teams as a grounded answer with citations.">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <style>
+        text{ font-family:'Segoe UI', system-ui, sans-serif; fill:currentColor; }
+        .lbl{ font-size:11px; fill:currentColor; opacity:0.75; }
+        .sub{ font-size:10px; fill:currentColor; opacity:0.6; font-family:'Cascadia Code', monospace; }
+        .box{ fill:none; stroke:currentColor; stroke-width:1.4; rx:9; }
+        .flow{ stroke:currentColor; stroke-width:1.3; fill:none; opacity:0.8; }
+      </style>
+
+      <rect x="430" y="14" width="860" height="472" rx="14" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="3 5" opacity="0.35"/>
+      <text x="1276" y="32" text-anchor="end" class="lbl" opacity="0.55">customer's Azure tenant</text>
+
+      <text x="40" y="46" class="lbl" style="font-weight:600; opacity:0.85;">INDEXING · scheduled, incremental</text>
+      <rect class="box" x="40" y="60" width="190" height="66"/>
+      <text x="135" y="88" text-anchor="middle" font-size="12.5" font-weight="600">SharePoint · OneDrive</text>
+      <text x="135" y="105" text-anchor="middle" class="sub">Teams channel files</text>
+
+      <line class="flow" x1="230" y1="93" x2="292" y2="93" marker-end="url(#arrow)"/>
+      <text x="261" y="83" text-anchor="middle" class="lbl">delta query</text>
+
+      <rect class="box" x="296" y="60" width="210" height="66"/>
+      <text x="401" y="84" text-anchor="middle" font-size="12.5" font-weight="600">Document Processing</text>
+      <text x="401" y="100" text-anchor="middle" class="sub">OpenXML · ClosedXML · PdfPig · OCR</text>
+      <text x="401" y="115" text-anchor="middle" class="sub">parse → chunk → embed</text>
+
+      <path class="flow" d="M506,93 C560,93 560,190 610,208" marker-end="url(#arrow)"/>
+      <text x="605" y="140" text-anchor="middle" class="lbl">embeddings</text>
+
+      <rect x="610" y="208" width="220" height="84" rx="10" fill="currentColor" opacity="0.08"/>
+      <rect class="box" x="610" y="208" width="220" height="84" opacity="0.9"/>
+      <text x="720" y="242" text-anchor="middle" font-size="13" font-weight="700">Vector Store</text>
+      <text x="720" y="259" text-anchor="middle" class="sub">Azure AI Search / pgvector</text>
+      <text x="720" y="274" text-anchor="middle" class="sub">chunk + embedding + ACL metadata</text>
+
+      <text x="40" y="376" class="lbl" style="font-weight:600; opacity:0.85;">QUERY · real time, per Teams message</text>
+      <rect class="box" x="40" y="390" width="150" height="66"/>
+      <text x="115" y="418" text-anchor="middle" font-size="12.5" font-weight="600">Teams Chat</text>
+      <text x="115" y="435" text-anchor="middle" class="sub">user's question</text>
+
+      <line class="flow" x1="190" y1="423" x2="242" y2="423" marker-end="url(#arrow)"/>
+      <text x="216" y="413" text-anchor="middle" class="lbl">prompt</text>
+
+      <rect class="box" x="246" y="390" width="150" height="66"/>
+      <text x="321" y="418" text-anchor="middle" font-size="12.5" font-weight="600">Angular Tab App</text>
+      <text x="321" y="435" text-anchor="middle" class="sub">Teams SDK · Fluent UI</text>
+
+      <line class="flow" x1="396" y1="423" x2="448" y2="423" marker-end="url(#arrow)"/>
+      <text x="422" y="413" text-anchor="middle" class="lbl">HTTPS</text>
+
+      <rect class="box" x="452" y="390" width="150" height="66"/>
+      <text x="527" y="418" text-anchor="middle" font-size="12.5" font-weight="600">.NET Core API</text>
+      <text x="527" y="435" text-anchor="middle" class="sub">orchestration</text>
+
+      <rect x="628" y="390" width="174" height="66" rx="9" fill="currentColor" opacity="0.06"/>
+      <rect x="628" y="390" width="174" height="66" rx="9" fill="none" stroke="var(--gold, #b8770f)" stroke-width="1.6"/>
+      <g transform="translate(708,397)" stroke="var(--gold,#b8770f)" stroke-width="1.5" fill="none">
+        <rect x="0" y="5" width="11" height="8" rx="1.3"/>
+        <path d="M1.8,5 V3.4 a3.7,3.7 0 0 1 7.4,0 V5"/>
+      </g>
+      <text x="715" y="424" text-anchor="middle" font-size="12" font-weight="700" style="fill:var(--gold,#b8770f);">Entra ID ACL check</text>
+      <text x="715" y="443" text-anchor="middle" class="sub">is this user allowed to see it?</text>
+
+      <line class="flow" x1="602" y1="423" x2="624" y2="423" marker-end="url(#arrow)"/>
+      <path class="flow" d="M715,390 C715,330 740,300 722,292" marker-end="url(#arrow)"/>
+      <text x="752" y="340" text-anchor="middle" class="lbl">ACL-filtered search</text>
+      <path class="flow" d="M810,292 C845,320 845,350 845,390" marker-end="url(#arrow)"/>
+
+      <rect class="box" x="826" y="390" width="190" height="66"/>
+      <text x="921" y="412" text-anchor="middle" font-size="12.5" font-weight="600">LLM Layer</text>
+      <text x="921" y="428" text-anchor="middle" class="sub">Ollama (local) ⇄</text>
+      <text x="921" y="441" text-anchor="middle" class="sub">Azure OpenAI (prod)</text>
+
+      <line class="flow" x1="1016" y1="423" x2="1068" y2="423" marker-end="url(#arrow)"/>
+      <text x="1042" y="413" text-anchor="middle" class="lbl">grounded draft</text>
+
+      <rect class="box" x="1072" y="390" width="208" height="66"/>
+      <text x="1176" y="415" text-anchor="middle" font-size="12.5" font-weight="600">Answer + Citations</text>
+      <text x="1176" y="432" text-anchor="middle" class="sub">file · page · slide references</text>
+
+      <path class="flow" d="M1176,390 C1176,300 400,260 190,412" marker-end="url(#arrow)" opacity="0.45"/>
+      <text x="700" y="483" text-anchor="middle" class="lbl" opacity="0.6">renders back into the Teams chat thread</text>
+    </svg>
+    <figcaption>Indexing (top) and query (bottom) are two independent, differently-timed flows that meet at one shared vector store. The gold box is the only place permissions are decided — everything to its right only ever sees content that user could already open in SharePoint.</figcaption>
+  </figure>
+
+  <div class="callout">
+    <b>Why security trimming happens twice</b>
+    <p>Indexing stores each chunk's SharePoint ACL as metadata, but access changes constantly — someone leaves a team, a file gets restricted. Trusting a stale permission copied in at index time is the most common way these systems leak. The API re-checks the live ACL through Graph on every single query, before any chunk reaches the model.</p>
+  </div>
+
+  <hr class="section-rule"/>
+  <h2>What this codebase actually implements today</h2>
+  <p>This scaffold is Phase 0/1 of the roadmap below — the shape is real, some pieces are deliberate stubs:</p>
+
+  <h3>Real</h3>
+  <p class="m">The Angular ⇄ .NET ⇄ Postgres/pgvector path, the Semantic Kernel provider abstraction (Ollama/Azure OpenAI chosen entirely by <code class="mono">Ai:Provider</code>), Swagger, Hangfire's recurring-job scheduling, and the retrieval + generation logic all run end-to-end once you point them at a real database and a running Ollama (or Azure OpenAI) endpoint.</p>
+
+  <h3>Stubbed on purpose</h3>
+  <p class="m"><code class="mono">AccessControlService</code> allows any authenticated caller through today and logs what a real check would have filtered — wiring it to live Microsoft Graph permission calls is Phase 2, once the Teams app is registered in Entra ID. <code class="mono">DocumentSyncService</code> doesn't call Graph yet either; see its doc comment for the three steps that finish it. Neither stub is hidden — both log loudly and are the two things to build next.</p>
+</div>

@@ -1,0 +1,87 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.19/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.19",
+  "version": "0.1.0",
+  "id": "REPLACE_WITH_IKIONE_APP_CLIENT_ID",
+  "developer": {
+    "name": "Tieto",
+    "websiteUrl": "https://www.tieto.com",
+    "privacyUrl": "https://www.tieto.com/en/privacy/",
+    "termsOfUseUrl": "https://www.tieto.com/en/privacy/legal-notice/"
+  },
+  "name": {
+    "short": "BD Copilot",
+    "full": "BD Copilot for Microsoft Teams"
+  },
+  "description": {
+    "short": "AI copilot for business development — chat, search, RFP and library in Teams.",
+    "full": "BD Copilot answers BD questions with SharePoint-grounded citations, searches indexed documents, and opens full RFP / Library tabs. Chat bot: ask questions or use search <keywords>. Full generators live in the personal tabs."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#021E57",
+  "bots": [
+    {
+      "botId": "REPLACE_WITH_IKIONE_APP_CLIENT_ID",
+      "scopes": ["personal", "team", "groupchat"],
+      "supportsFiles": false,
+      "isNotificationOnly": false,
+      "commandLists": [
+        {
+          "scopes": ["personal", "team", "groupchat"],
+          "commands": [
+            {
+              "title": "help",
+              "description": "Show BD Copilot commands and tab links"
+            },
+            {
+              "title": "search",
+              "description": "Search indexed SharePoint documents (search wealth RFP)"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "staticTabs": [
+    {
+      "entityId": "bd-copilot-chat",
+      "name": "Chat",
+      "contentUrl": "https://YOUR-NGROK-4200.ngrok-free.app/chat",
+      "websiteUrl": "https://YOUR-NGROK-4200.ngrok-free.app/chat",
+      "scopes": ["personal"]
+    },
+    {
+      "entityId": "bd-copilot-rfp",
+      "name": "RFP",
+      "contentUrl": "https://YOUR-NGROK-4200.ngrok-free.app/rfp",
+      "websiteUrl": "https://YOUR-NGROK-4200.ngrok-free.app/rfp",
+      "scopes": ["personal"]
+    },
+    {
+      "entityId": "bd-copilot-search",
+      "name": "Search",
+      "contentUrl": "https://YOUR-NGROK-4200.ngrok-free.app/search",
+      "websiteUrl": "https://YOUR-NGROK-4200.ngrok-free.app/search",
+      "scopes": ["personal"]
+    },
+    {
+      "entityId": "bd-copilot-library",
+      "name": "Library",
+      "contentUrl": "https://YOUR-NGROK-4200.ngrok-free.app/library",
+      "websiteUrl": "https://YOUR-NGROK-4200.ngrok-free.app/library",
+      "scopes": ["personal"]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": [
+    "YOUR-NGROK-4200.ngrok-free.app",
+    "YOUR-NGROK-5154.ngrok-free.app"
+  ],
+  "webApplicationInfo": {
+    "id": "REPLACE_WITH_IKIONE_APP_CLIENT_ID",
+    "resource": "api://YOUR-NGROK-4200.ngrok-free.app/REPLACE_WITH_IKIONE_APP_CLIENT_ID"
+  }
+}

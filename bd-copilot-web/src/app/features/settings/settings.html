@@ -1,0 +1,49 @@
+<div class="panel-head">
+  <div>
+    <h2>Settings</h2>
+    <p>
+      The model provider is read-only here by design — it's owned by <code class="mono">Ai:Provider</code>
+      in the API's configuration, not by a runtime toggle a client could flip. See the note below.
+    </p>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="error-banner">{{ errorMessage() }}</div>
+}
+
+@if (loading()) {
+  <p style="color: var(--ink-muted); font-size: 13.5px;">Loading…</p>
+} @else if (status(); as s) {
+  <div class="status-cards">
+    <div class="status-card" [class.active]="s.provider === 'Ollama'">
+      <h4>🖥️ Local — Ollama</h4>
+      <p>Runs on a developer's own machine. Active when <code class="mono">Ai:Provider</code> = "Ollama" (the default in appsettings.Development.json).</p>
+    </div>
+    <div class="status-card" [class.active]="s.provider === 'AzureOpenAI'">
+      <h4>☁️ Production — Azure OpenAI</h4>
+      <p>Entra ID-authenticated tenant deployment. Active when <code class="mono">Ai:Provider</code> = "AzureOpenAI" (the default in appsettings.Production.json).</p>
+    </div>
+  </div>
+
+  <p style="font-size: 13.5px; color: var(--ink-muted);">
+    Currently serving from <b style="color: var(--ink);">{{ s.provider }}</b> —
+    chat/drafting model <code class="mono">{{ s.chatModel }}</code>,
+    embedding model <code class="mono">{{ s.embeddingModel }}</code>.
+  </p>
+}
+
+<div class="toggle-row">
+  <div>
+    Security trimming (Entra ID + SharePoint ACLs)
+    <span class="d">Re-checked on every query, not just at index time — always on, not a setting.</span>
+  </div>
+  <fluent-switch [attr.checked]="true" [attr.disabled]="true"></fluent-switch>
+</div>
+<div class="toggle-row">
+  <div>
+    Log generated documents for review
+    <span class="d">Every generator response has status "Draft" until a human approves export.</span>
+  </div>
+  <fluent-switch [attr.checked]="true" [attr.disabled]="true"></fluent-switch>
+</div>

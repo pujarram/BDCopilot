@@ -1,0 +1,708 @@
+/**
+ * BD Copilot — Tieto theme (ported from Polaris standard brand layer)
+ * Brand: https://brand.tieto.com/document/165
+ */
+
+/* ── Fonts (self-hosted — tieto.com blocks cross-origin font loads via CORS) ─ */
+@font-face {
+  font-family: 'Tieto Sans';
+  font-display: swap;
+  src: url('/fonts/TietoSans-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Tieto Sans';
+  font-display: swap;
+  src: url('/fonts/TietoSans-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Tieto Sans';
+  font-display: swap;
+  src: url('/fonts/TietoSans-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Tieto Sans';
+  font-display: swap;
+  src: url('/fonts/TietoSans-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Tieto Numerals';
+  font-display: swap;
+  src: url('/fonts/TietoNumerals-Impact.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+}
+
+/* ── Design tokens ─────────────────────────────────────────────────── */
+:root {
+  --tieto-blue-400: #839df9;
+  --tieto-blue-500: #4e60e7;
+  --tieto-blue-600: #3531cf;
+  --tieto-blue-900: #021e57;
+  --tieto-yellow-200: #f6ff67;
+  --tieto-yellow-300: #f5ff56;
+  --tieto-grey-50: #fcfaf7;
+  --tieto-grey-100: #f3f0ef;
+  --tieto-grey-200: #e2e0df;
+  --tieto-grey-300: #d2d0cb;
+  --tieto-grey-400: #a8a29e;
+  --tieto-grey-600: #57524f;
+  --tieto-grey-700: #423b38;
+  --tieto-white: #ffffff;
+  --tieto-red-700: #be163c;
+  --bg: var(--tieto-grey-50);
+  --surface: var(--tieto-white);
+  --s2: var(--tieto-grey-100);
+  --border: var(--tieto-grey-200);
+  --text: var(--tieto-blue-900);
+  --text2: var(--tieto-grey-600);
+  --text3: var(--tieto-grey-400);
+  --gold: var(--tieto-yellow-300);
+  --gold-bg: #fefce8;
+  --teal: var(--tieto-blue-500);
+  --teal-bg: #eef0fd;
+  --green: #059669;
+  --green-bg: #ecfdf5;
+  --rose: var(--tieto-red-700);
+  --rose-bg: #fff1f2;
+  --header-h: 4.5rem;
+  --nav-w: 15.5rem;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-menu: 2px 6px 8px 0 #021b4221;
+  --font-sans: 'Tieto Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-numerals: 'Tieto Numerals', var(--font-sans);
+}
+
+/* ── Base ──────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+a {
+  color: var(--tieto-blue-600);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--tieto-blue-500);
+  text-decoration: underline;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* ── Shared UI components ──────────────────────────────────────────── */
+.tieto-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--tieto-yellow-300);
+  color: var(--tieto-blue-900);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.tieto-btn-primary:hover:not(:disabled) {
+  background: var(--tieto-yellow-200);
+}
+
+.tieto-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tieto-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 1.15rem;
+  border: 2px solid var(--tieto-blue-600);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--tieto-blue-600);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.tieto-btn-secondary:hover {
+  border-color: var(--tieto-blue-500);
+  color: var(--tieto-blue-500);
+}
+
+.tieto-btn-ghost {
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text2);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.tieto-btn-ghost:hover {
+  background: var(--s2);
+}
+
+.tieto-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+}
+
+.tieto-eyebrow {
+  color: var(--tieto-blue-600);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tieto-page-title {
+  margin: 0;
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.tieto-chip {
+  display: inline-block;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--teal-bg);
+  color: var(--tieto-blue-600);
+}
+
+.tieto-chip--success {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.tieto-stat-value {
+  font-family: var(--font-numerals);
+  font-size: 1.5rem;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+/* ── App shell (header / nav / footer) ─────────────────────────────── */
+app-root {
+  display: block;
+  min-height: 100%;
+}
+
+.tieto-app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.tieto-header {
+  background: var(--tieto-blue-900);
+  color: var(--tieto-white);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.tieto-header__inner {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  min-height: var(--header-h);
+  padding: 0 1rem;
+}
+
+@media (min-width: 768px) {
+  .tieto-header__inner {
+    padding: 0 2.5rem;
+  }
+}
+
+.tieto-header__logo img {
+  display: block;
+  height: 28px;
+  width: auto;
+}
+
+.tieto-header__product {
+  display: none;
+  flex-direction: column;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  padding-left: 1rem;
+}
+
+@media (min-width: 900px) {
+  .tieto-header__product {
+    display: flex;
+  }
+}
+
+.tieto-header__product-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--tieto-yellow-300);
+}
+
+.tieto-header__product-tag {
+  font-size: 0.75rem;
+  color: var(--tieto-blue-400);
+}
+
+.tieto-header__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: stretch;
+  height: var(--header-h);
+}
+
+.tieto-header__link {
+  display: none;
+  align-items: center;
+  padding: 0 1rem;
+  color: var(--tieto-yellow-300);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.tieto-header__link:hover {
+  text-decoration: underline;
+  color: var(--tieto-yellow-200);
+}
+
+@media (min-width: 768px) {
+  .tieto-header__link {
+    display: flex;
+  }
+}
+
+.tieto-header__menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 1.5rem;
+  border: none;
+  background: var(--tieto-yellow-300);
+  color: var(--tieto-blue-900);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tieto-header__menu-btn:hover {
+  background: var(--tieto-yellow-200);
+}
+
+@media (min-width: 768px) {
+  .tieto-header__menu-btn {
+    padding: 0 3rem;
+  }
+}
+
+.tieto-header__menu-btn tieto-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.tieto-header__menu-label {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .tieto-header__menu-label {
+    display: inline;
+  }
+}
+
+.tieto-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  position: relative;
+}
+
+.tieto-nav {
+  width: var(--nav-w);
+  flex-shrink: 0;
+  background: var(--tieto-grey-50);
+  border-right: 1px solid var(--tieto-grey-200);
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  padding: 0.75rem;
+}
+
+@media (max-width: 1023px) {
+  .tieto-nav {
+    position: fixed;
+    top: var(--header-h);
+    left: 0;
+    bottom: 0;
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: var(--shadow-menu);
+    width: min(85vw, 20rem);
+  }
+
+  .tieto-nav.is-open {
+    transform: translateX(0);
+  }
+}
+
+.tieto-nav__section {
+  margin-bottom: 0.5rem;
+}
+
+.tieto-nav__heading {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tieto-blue-600);
+  padding: 0.75rem 0.5rem 0.35rem;
+}
+
+.tieto-nav__link {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: var(--radius-sm);
+  color: var(--tieto-blue-900);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.tieto-nav__link:hover {
+  background: var(--tieto-grey-100);
+  color: var(--tieto-blue-500);
+  text-decoration: none;
+}
+
+.tieto-nav__link.is-active {
+  background: var(--tieto-white);
+  color: var(--tieto-blue-600);
+  box-shadow: inset 3px 0 0 var(--tieto-yellow-300);
+}
+
+.tieto-nav__link tieto-icon {
+  opacity: 0.85;
+}
+
+.tieto-nav__user {
+  margin-top: auto;
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.75rem;
+  border-top: 1px solid var(--tieto-grey-200);
+}
+
+.tieto-nav__avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--tieto-blue-600);
+  color: var(--tieto-white);
+  display: grid;
+  place-items: center;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.tieto-nav__user-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--tieto-blue-900);
+}
+
+.tieto-nav__user-role {
+  font-size: 0.6875rem;
+  color: var(--tieto-grey-400);
+}
+
+.tieto-nav__user-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.tieto-nav__logout {
+  border: none;
+  background: transparent;
+  color: var(--tieto-grey-400);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 0.35rem;
+  display: grid;
+  place-items: center;
+}
+
+.tieto-nav__logout:hover {
+  color: var(--tieto-red-700);
+  background: var(--rose-bg);
+}
+
+.tieto-overlay {
+  position: fixed;
+  inset: var(--header-h) 0 0 0;
+  z-index: 30;
+  border: none;
+  background: rgba(2, 30, 87, 0.45);
+  cursor: pointer;
+}
+
+@media (min-width: 1024px) {
+  .tieto-overlay {
+    display: none;
+  }
+}
+
+.tieto-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tieto-page-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: var(--tieto-white);
+  border-bottom: 1px solid var(--tieto-grey-200);
+}
+
+.tieto-page-bar__title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--tieto-blue-900);
+}
+
+.tieto-page-bar__sub {
+  font-size: 0.75rem;
+  color: var(--tieto-grey-400);
+  margin-top: 0.15rem;
+}
+
+.tieto-page-bar__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tieto-content {
+  flex: 1;
+  overflow: auto;
+  padding: 1.25rem;
+}
+
+.tieto-footer {
+  z-index: 0;
+  margin-top: auto;
+  background: var(--tieto-blue-900);
+}
+
+.tieto-footer__bar {
+  background: var(--tieto-yellow-300);
+  color: var(--tieto-blue-900);
+  padding: 1.5rem 0;
+}
+
+@media (min-width: 1024px) {
+  .tieto-footer__bar {
+    padding: 2rem 0;
+  }
+}
+
+.tieto-footer__inner {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  align-items: center;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+@media (min-width: 768px) {
+  .tieto-footer__inner {
+    padding: 0 2.5rem;
+    grid-template-columns: 1fr auto;
+    column-gap: 1.5rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .tieto-footer__inner {
+    grid-template-columns: minmax(0, 1.5fr) auto minmax(0, 1fr);
+  }
+}
+
+.tieto-footer ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.tieto-footer__legal ul > li,
+.tieto-footer__social ul > li {
+  display: flex;
+  align-items: center;
+}
+
+.tieto-footer__legal ul > li:not(:last-child)::after,
+.tieto-footer__social ul > li:not(:last-child)::after,
+.tieto-footer__copy-year::after {
+  content: '·';
+  margin-left: 0.5rem;
+  margin-right: 0;
+}
+
+.tieto-footer__copy-year::after {
+  margin-left: 0.5rem;
+  margin-right: 0.5rem;
+}
+
+.tieto-footer a,
+.tieto-footer__cookie-btn {
+  color: var(--tieto-blue-900);
+  font-size: 0.875rem;
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.tieto-footer a:hover,
+.tieto-footer__cookie-btn:hover {
+  text-decoration: underline;
+}
+
+.tieto-footer a:focus-visible,
+.tieto-footer__cookie-btn:focus-visible {
+  outline: 2px solid var(--tieto-blue-900);
+  outline-offset: 2px;
+}
+
+.tieto-footer__copy {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+  .tieto-footer__legal {
+    grid-column: 1 / -1;
+  }
+
+  .tieto-footer__copy {
+    grid-column: 1;
+  }
+
+  .tieto-footer__social {
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .tieto-footer__social ul {
+    justify-content: flex-end;
+  }
+}
+
+@media (min-width: 1280px) {
+  .tieto-footer__legal {
+    grid-column: 1;
+  }
+
+  .tieto-footer__copy {
+    grid-column: 2;
+    justify-self: center;
+  }
+
+  .tieto-footer__social {
+    grid-column: 3;
+    justify-self: end;
+  }
+}
+
+/* ── Icon component ────────────────────────────────────────────────── */
+tieto-icon {
+  display: inline-flex;
+  line-height: 0;
+}
+
+tieto-icon .tieto-icon svg {
+  display: block;
+  width: 1.125rem;
+  height: 1.125rem;
+}

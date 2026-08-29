@@ -1,0 +1,54 @@
+<div class="panel-head">
+  <div>
+    <h2>Copilot chat</h2>
+    <p>Ask in plain language — the copilot searches indexed Teams &amp; SharePoint files and answers with sources.</p>
+  </div>
+</div>
+
+<div class="prompt-chips">
+  @for (prompt of prompts; track prompt.key) {
+    <button class="chip" type="button" (click)="usePrompt(prompt.text)">{{ prompt.text }}</button>
+  }
+</div>
+
+@if (errorMessage()) {
+  <div class="error-banner">{{ errorMessage() }}</div>
+}
+
+<div class="chat-log" #logEl>
+  @for (msg of messages(); track $index) {
+    <div class="msg" [class.user]="msg.role === 'user'" [class.ai]="msg.role === 'assistant'">
+      <div class="avatar">{{ msg.role === 'user' ? 'You' : 'AI' }}</div>
+      <div class="bubble">
+        {{ msg.text }}
+        @if (msg.citations && msg.citations.length) {
+          <div class="citations">
+            @for (c of msg.citations; track c.documentId + (c.locator ?? '')) {
+              <span class="cite">📎 {{ c.fileName }}{{ c.locator ? ' · ' + c.locator : '' }}</span>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  @if (asking()) {
+    <div class="msg ai">
+      <div class="avatar">AI</div>
+      <div class="thinking">
+        Searching indexed documents and checking your access…
+        <span class="dots"><span></span><span></span><span></span></span>
+      </div>
+    </div>
+  }
+</div>
+
+<div class="composer">
+  <fluent-text-input
+    placeholder="Ask BD Copilot about your proposals, RFPs or demos…"
+    [attr.value]="draft()"
+    (input)="onInput($event)"
+    (keydown)="onKeydown($event)">
+  </fluent-text-input>
+  <fluent-button appearance="accent" [attr.disabled]="asking() ? true : null" (click)="ask()">Send</fluent-button>
+</div>

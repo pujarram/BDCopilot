@@ -1,0 +1,200 @@
+<div class="panel-head">
+  <div>
+    <h2>Business Case Generator</h2>
+    <p>Finds comparable engagements, estimates benefit ranges, and drafts an executive-ready case — live, with history and export.</p>
+  </div>
+</div>
+
+@if (reuseBanner(); as reuse) {
+  <div class="reuse-banner">
+    <strong>From Knowledge Search · {{ reuse.label }}</strong>
+    <p>{{ reuse.excerpt }}</p>
+    <div class="reuse-banner__clear">
+      <fluent-button (click)="clearReuse()">Clear focus</fluent-button>
+    </div>
+  </div>
+}
+
+<div class="form-grid">
+  <div class="field">
+    <label for="bc-initiative">Initiative</label>
+    <fluent-text-input id="bc-initiative" [attr.value]="initiative()" (input)="initiative.set($any($event.target).value)"></fluent-text-input>
+  </div>
+  <div class="field">
+    <label for="bc-audience">Audience</label>
+    <select id="bc-audience" [value]="audience()" (change)="audience.set($any($event.target).value)">
+      <option value="ExecutiveSponsor">Executive sponsor</option>
+      <option value="SteeringCommittee">Steering committee</option>
+    </select>
+  </div>
+  <div class="field field--full">
+    <span class="field-label">Document source</span>
+    <div class="corpus-radios" role="radiogroup" aria-label="Document source">
+      <label class="corpus-radio">
+        <input type="radio" name="bc-corpus" value="Local" [checked]="corpusSource() === 'Local'" (change)="corpusSource.set('Local')" />
+        Local (docs folder)
+      </label>
+      <label class="corpus-radio">
+        <input type="radio" name="bc-corpus" value="Online" [checked]="corpusSource() === 'Online'" (change)="corpusSource.set('Online')" />
+        Online (SharePoint)
+      </label>
+    </div>
+  </div>
+</div>
+
+<fluent-button appearance="accent" [attr.disabled]="generating() || streaming() ? true : null" (click)="generate()">
+  {{ generating() || streaming() ? 'Generating…' : 'Generate business case' }}
+</fluent-button>
+
+@if (progressLabel()) {
+  <div class="gen-progress" aria-live="polite">{{ progressLabel() }}</div>
+}
+
+@if (errorMessage()) {
+  <div class="error-banner" style="margin-top:16px;">{{ errorMessage() }}</div>
+}
+
+@if (streamSections().length) {
+  <div class="gen-stream" [class.gen-stream--live]="streaming() || generating()">
+    @for (section of streamSections(); track section.order) {
+      <article
+        class="gen-stream-card"
+        [class.is-queued]="section.status === 'queued' || section.status === 'writing-title'"
+        [class.is-generating]="section.status === 'generating'"
+        [class.is-done]="section.status === 'done'"
+        [class.is-error]="section.status === 'error'"
+        [class.is-clickable]="section.status === 'done'"
+        (click)="section.status === 'done' ? viewSection(section) : null"
+      >
+        <header class="gen-stream-card__head">
+          <span class="gen-stream-card__n">{{ section.order.toString().padStart(2, '0') }}</span>
+          <h3 class="gen-stream-card__title">
+            {{ section.displayTitle || '…' }}
+            @if (section.status === 'generating') {
+              <span class="gen-caret" aria-hidden="true"></span>
+            }
+          </h3>
+          <span class="gen-stream-card__status">
+            @switch (section.status) {
+              @case ('queued') { Waiting }
+              @case ('writing-title') { Outlining }
+              @case ('generating') { Writing }
+              @case ('done') { Done }
+              @case ('error') { Failed }
+            }
+          </span>
+        </header>
+        @if (section.content || section.status === 'generating') {
+          <div class="gen-stream-card__body">
+            <p>{{ section.content }}@if (section.status === 'generating') {
+              <span class="gen-caret" aria-hidden="true"></span>
+            }</p>
+            @if (section.status === 'done' && section.sources.length) {
+              <div class="gen-stream-card__sources">
+                @for (src of section.sources.slice(0, 2); track src.fileName + (src.locator ?? '')) {
+                  <span class="src-chip">{{ src.fileName }}{{ src.locator ? ' · ' + src.locator : '' }}</span>
+                }
+              </div>
+            }
+          </div>
+        }
+      </article>
+    }
+  </div>
+}
+
+@if (result(); as doc) {
+  <div class="gen-output show">
+    <div class="gen-output-head">
+      <div class="doc-badge">
+        <span class="ico">✓</span>
+        {{ doc.sections.length }} sections
+        <fluent-badge class="status-chip"
+                      [attr.appearance]="isApproved() ? 'filled' : 'outline'"
+                      [attr.color]="isApproved() ? 'success' : 'neutral'">
+          {{ doc.status }}
+        </fluent-badge>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        @if (!isApproved()) {
+          <fluent-button appearance="accent" [attr.disabled]="approving() ? true : null" (click)="approve()">
+            {{ approving() ? 'Approving…' : 'Approve' }}
+          </fluent-button>
+        }
+        <fluent-button [attr.disabled]="exporting() ? true : null" (click)="exportDocx()">
+          {{ exporting() ? 'Exporting…' : 'a. Export .docx' }}
+        </fluent-button>
+        <fluent-button [attr.disabled]="exporting() ? true : null" (click)="exportPptx()">Export .pptx</fluent-button>
+        <fluent-button [attr.disabled]="channelBusy() ? true : null" (click)="saveToBdChannel()">
+          {{ channelBusy() ? 'Uploading…' : 'b. Save to BD channel' }}
+        </fluent-button>
+        <fluent-button [attr.disabled]="saving() ? true : null" (click)="saveToDatabase()">
+          {{ saving() ? 'Saving…' : 'c. Save to database' }}
+        </fluent-button>
+        <fluent-button (click)="discard()">Discard</fluent-button>
+      </div>
+    </div>
+    <p class="gen-hint">
+      Export anytime after generation. Draft auto-saves to PostgreSQL history.
+      @if (savedRow(); as saved) {
+        History id: <code>{{ saved.id }}</code>
+        @if (saved.channelUploadStatus) {
+          · Channel: {{ saved.channelUploadStatus }}
+        }
+      }
+    </p>
+  </div>
+}
+
+@if (selectedSection(); as section) {
+  <div class="section-preview">
+    <h4>{{ section.order.toString().padStart(2, '0') }} · {{ section.title }}</h4>
+    <p style="white-space: pre-wrap; font-size: 13.5px; line-height: 1.7;">{{ section.content }}</p>
+  </div>
+}
+
+<section class="rfp-history">
+  <div class="rfp-history__head">
+    <h3>Business case history</h3>
+    <fluent-button (click)="refreshHistory()">Refresh</fluent-button>
+  </div>
+  @if (!history().length) {
+    <p class="gen-hint">No saved business cases yet — generate one to populate history.</p>
+  } @else {
+    <div class="rfp-history__list">
+      @for (item of history(); track item.id) {
+        <article class="rfp-history__item">
+          <div>
+            <strong>{{ item.title }}</strong>
+            <div class="gen-hint">
+              {{ item.summaryLabel || '—' }} · {{ item.createdByDisplayName || item.createdByUserObjectId }} ·
+              {{ item.createdAt | date: 'medium' }} · {{ item.status }}
+              @if (item.channelUploadStatus) {
+                · Channel: {{ item.channelUploadStatus }}
+              }
+            </div>
+          </div>
+          <div class="rfp-history__actions">
+            <fluent-button (click)="openHistory(item)">View</fluent-button>
+            <fluent-button (click)="exportHistory(item)">Export</fluent-button>
+            <fluent-button (click)="channelHistory(item)">Save to BD channel</fluent-button>
+          </div>
+        </article>
+      }
+    </div>
+  }
+</section>
+
+@if (historyDetail(); as detail) {
+  <div class="section-preview">
+    <div class="gen-output-head">
+      <h4>{{ detail.title }}</h4>
+      <fluent-button (click)="closeHistoryDetail()">Close</fluent-button>
+    </div>
+    <p class="gen-hint">Created {{ detail.createdAt | date: 'medium' }} by {{ detail.createdByDisplayName || detail.createdByUserObjectId }}</p>
+    @for (section of historySections(); track section.order) {
+      <h4 style="margin-top:14px;">{{ section.title }}</h4>
+      <p style="white-space: pre-wrap; font-size: 13.5px; line-height: 1.7;">{{ section.content || '—' }}</p>
+    }
+  </div>
+}

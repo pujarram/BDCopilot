@@ -1,0 +1,92 @@
+# ---------------------------------------------------------------------------
+# BD Copilot — root .gitignore
+# ---------------------------------------------------------------------------
+
+# OS / editor
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*~
+.idea/
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+*.user
+*.suo
+*.userprefs
+
+# Environment / secrets (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.pfx
+*.key
+secrets.json
+**/appsettings.*.local.json
+**/appsettings.Local.json
+**/appsettings.Development.json
+!**/appsettings.Development.example.json
+**/secrets/
+user-secrets.json
+
+# .NET
+**/bin/
+**/obj/
+**/out/
+*.dll
+*.exe
+*.pdb
+*.cache
+*.log
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+backend/_build_verify*/
+backend/**/publish/
+backend/**/*.nupkg
+
+# Hangfire / local runtime
+**/App_Data/
+**/local-exports/
+**/wwwroot/exports/
+
+# Node / Angular
+**/node_modules/
+bd-copilot-web/dist/
+bd-copilot-web/.angular/
+bd-copilot-web/tmp/
+bd-copilot-web/out-tsc/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+
+# Docker volumes / local data
+*.db
+*.sqlite
+*.sqlite3
+
+# Local document corpus (RFP / proposals — keep off public GitHub)
+# Allow small docs helpers + Teams app package source only.
+docs/**
+!docs/README.md
+!docs/sample-local-knowledge.md
+!docs/teams-app/
+!docs/teams-app/**
+docs/teams-app/**/*.zip
+docs/Final/
+
+# Cursor / agent local state (if present under repo)
+.cursor/
+agent-transcripts/
+terminals/
+
+# Misc build / temp
+*.tmp
+*.temp
+*.bak
+~$*

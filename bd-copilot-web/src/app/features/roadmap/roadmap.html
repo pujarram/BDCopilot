@@ -1,0 +1,69 @@
+<div class="doc">
+  <h2>Rollout plan</h2>
+  <p class="lede">Five phases, each shippable and demoable on its own. This codebase is Phase 0/1: the RAG loop, the Angular ⇄ .NET ⇄ Postgres path, and the provider abstraction all run end-to-end; the two Graph-dependent stubs (<code class="mono">AccessControlService</code>, <code class="mono">DocumentSyncService</code>) are what Phase 1/2 finish next.</p>
+
+  <div style="margin:30px 0 0; padding-left:38px;">
+    <div class="phase">
+      <div class="phase-num">0</div>
+      <div class="phase-line"><div class="phase-body">
+        <h3>Local prototype — this scaffold</h3>
+        <div class="phase-meta">done · no Graph, no Azure spend</div>
+        <p>Angular shell and .NET API running against Postgres/pgvector, with LLM calls going to a local Ollama instance. The RAG loop — question in, grounded answer with a citation out — works today once you seed a document and run <code class="mono">dotnet run</code> + <code class="mono">ng serve</code>.</p>
+        <div class="phase-tags"><span>Angular 20</span><span>.NET Core 10</span><span>Ollama</span><span>pgvector</span><span>Swagger</span></div>
+      </div></div>
+    </div>
+    <div class="phase">
+      <div class="phase-num">1</div>
+      <div class="phase-line"><div class="phase-body">
+        <h3>Document indexing pilot</h3>
+        <div class="phase-meta">next up · one pilot SharePoint site</div>
+        <p>Register the Entra ID app, grant delegated Graph read access to one team's site, and finish <code class="mono">DocumentSyncService</code> against Graph's delta query (<code class="mono">GET /drives/&#123;id&#125;/root/delta</code>) — see the three steps noted in its doc comment. Wire up real parsing (OpenXML/ClosedXML/PdfPig/OCR) in place of the current plain-text ingestion, and start writing real ACL hashes to <code class="mono">Documents.AclHash</code>.</p>
+        <div class="phase-tags"><span>Microsoft Graph delta query</span><span>OpenXML SDK</span><span>ClosedXML</span><span>PdfPig</span><span>Document Intelligence OCR</span></div>
+      </div></div>
+    </div>
+    <div class="phase">
+      <div class="phase-num">2</div>
+      <div class="phase-line"><div class="phase-body">
+        <h3>Teams chat MVP</h3>
+        <div class="phase-meta">first real users</div>
+        <p>Publish the Teams app manifest (see <code class="mono">bd-copilot-web/public/teams/manifest.json</code>), embed the Angular tab, and finish <code class="mono">AccessControlService</code> so it calls live Graph permission checks instead of allowing everyone through. Switch <code class="mono">Ai:Provider</code> to <code class="mono">AzureOpenAI</code> for staging — this is the point where the gold box in the Architecture diagram stops being a diagram and starts being enforced.</p>
+        <div class="phase-tags"><span>Teams App Manifest</span><span>Azure OpenAI</span><span>Entra ID ACL check</span></div>
+      </div></div>
+    </div>
+    <div class="phase">
+      <div class="phase-num">3</div>
+      <div class="phase-line"><div class="phase-body">
+        <h3>Generator quality pass</h3>
+        <div class="phase-meta">the tools in this prototype, hardened</div>
+        <p>RFP, business case and proposal generators already call the real API and return grounded drafts with citations; this phase adds Word/PPT export via OpenXML and a lightweight human-approval step before anything leaves the app, matching the "Draft" status every generated document already carries.</p>
+        <div class="phase-tags"><span>RFP Generator</span><span>Business Case Generator</span><span>Proposal Generator</span><span>Human approval step</span></div>
+      </div></div>
+    </div>
+    <div class="phase">
+      <div class="phase-num">4</div>
+      <div class="phase-line"><div class="phase-body">
+        <h3>Enterprise hardening</h3>
+        <div class="phase-meta">ongoing</div>
+        <p>Migrate retrieval to Azure AI Search once security-trimmed, semantic search at tenant scale matters more than pgvector's simplicity. Add a golden question-and-answer evaluation set so retrieval regressions are caught before users notice. Ship an admin console for reindexing, access audits and per-team token-cost reporting.</p>
+        <div class="phase-tags"><span>Azure AI Search</span><span>Eval harness</span><span>Cost governance</span><span>Admin console</span></div>
+      </div></div>
+    </div>
+  </div>
+
+  <hr class="section-rule"/>
+  <h2>Ideas worth adding to the brief</h2>
+
+  <h3>A feedback loop on generated content</h3>
+  <p class="m">Every accept, edit, or discard of a generated section is a labelled example of what "good" looks like for this team. Logging that quietly from day one — without slowing anyone down to rate anything explicitly — is what eventually lets the RFP Generator learn this team's actual voice instead of a generic one.</p>
+
+  <h3>An evaluation harness before scale, not after</h3>
+  <p class="m">A small, hand-picked set of real questions with known-correct source documents, re-run on every change to chunking, embeddings, or prompts. Cheap to build in Phase 1; the only reliable way to know a "small tweak" didn't quietly make retrieval worse.</p>
+
+  <h3>Cost and usage visibility from the first production query</h3>
+  <p class="m">Token spend on GPT-4o for long document generation adds up quickly across a BD team. Logging tokens-per-request against team and initiative in Application Insights from Phase 2 onward means the first cost conversation happens with data, not a surprised finance review.</p>
+
+  <h3>Treat the Document Library as a trust surface, not just a status page</h3>
+  <p class="m">The library screen doubles as the easiest way for a team to notice indexing has silently stalled, or that a file they expected to be searchable is showing "restricted." Making that visible — rather than only surfacing errors in logs — is cheap now and expensive to retrofit later.</p>
+
+  <footer class="note">This codebase implements Phase 0/1 for real — it is not a click-through mock. What still needs to change before Phase 2 is exactly the two stubs called out in Architecture: <code class="mono">AccessControlService</code> and <code class="mono">DocumentSyncService</code>. Everything else on this page describes work still ahead of the code, not work the code is pretending to have already done.</footer>
+</div>

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "g01",
+    "question": "What security and compliance topics are covered for wealth proposals?",
+    "expectedFileNameFragments": ["Compliance_FAQ", "Wealth_Proposal"]
+  },
+  {
+    "id": "g02",
+    "question": "Summarize the wealth proposal template structure and recommended sections.",
+    "expectedFileNameFragments": ["Wealth_Proposal_Template"]
+  },
+  {
+    "id": "g03",
+    "question": "What ROI and payback guidance appears in the retail business case?",
+    "expectedFileNameFragments": ["Retail_Business_Case"]
+  },
+  {
+    "id": "g04",
+    "question": "How should GDPR and data residency be described to banking clients?",
+    "expectedFileNameFragments": ["Compliance_FAQ"]
+  },
+  {
+    "id": "g05",
+    "question": "What delivery and architecture points should a wealth platform proposal include?",
+    "expectedFileNameFragments": ["Wealth_Proposal_Template"]
+  },
+  {
+    "id": "g06",
+    "question": "List benefits called out for retail digital transformation business cases.",
+    "expectedFileNameFragments": ["Retail_Business_Case"]
+  },
+  {
+    "id": "g07",
+    "question": "What ACL and citation rules should BD Copilot follow when answering?",
+    "expectedFileNameFragments": ["Compliance_FAQ", "Wealth_Proposal"]
+  },
+  {
+    "id": "g08",
+    "question": "Describe commercial and pricing guidance reused from prior wealth proposals.",
+    "expectedFileNameFragments": ["Wealth_Proposal_Template"]
+  },
+  {
+    "id": "g09",
+    "question": "What risks and mitigations are typical in retail business cases?",
+    "expectedFileNameFragments": ["Retail_Business_Case"]
+  },
+  {
+    "id": "g10",
+    "question": "Explain SharePoint permission awareness for indexed documents.",
+    "expectedFileNameFragments": ["Compliance_FAQ"]
+  },
+  {
+    "id": "g11",
+    "question": "What executive summary themes belong in a wealth management RFP response?",
+    "expectedFileNameFragments": ["Wealth_Proposal_Template"]
+  },
+  {
+    "id": "g12",
+    "question": "How is RAG used with citations in business development documents?",
+    "expectedFileNameFragments": ["Wealth_Proposal_Template", "Compliance_FAQ"]
+  }
+]

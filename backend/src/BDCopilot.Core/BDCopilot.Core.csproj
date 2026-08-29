@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Only the lightweight Vector value type — the EF Core integration package
+         (Pgvector.EntityFrameworkCore) belongs in Infrastructure, not here, since Core
+         must not depend on a specific persistence technology. -->
+    <PackageReference Include="Pgvector" Version="0.3.1" />
+  </ItemGroup>
+
+</Project>

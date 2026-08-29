@@ -1,0 +1,78 @@
+<div class="doc">
+  <h2>Technology stack</h2>
+  <p class="lede">One stack, two environments. Everything below the "AI" row is identical between your laptop and production — only the model provider changes, through the Semantic Kernel abstraction described in Architecture.</p>
+
+  <div class="table-wrap">
+    <table class="stack-table">
+      <tbody>
+        <tr><td class="role">Frontend</td><td><code>Angular 20</code> <code>Teams JS SDK</code> <code>Fluent UI Web Components</code> <code>RxJS</code></td></tr>
+        <tr><td class="role">Backend API</td><td><code>.NET Core 10</code> <code>ASP.NET Web API</code> <code>Semantic Kernel</code> <code>Hangfire</code> (sync jobs) <code>Swashbuckle</code> (Swagger UI)</td></tr>
+        <tr><td class="role">Retrieval / RAG</td><td><code>PostgreSQL</code> + <code>pgvector</code> — cosine-similarity search via <code>Pgvector.EntityFrameworkCore</code></td></tr>
+        <tr><td class="role">AI — local dev</td><td><code>Ollama</code> · <code>llama3.1:8b</code> for chat &amp; drafting, <code>nomic-embed-text</code> for embeddings</td></tr>
+        <tr><td class="role">AI — production</td><td><code>Azure OpenAI</code> · <code>gpt-4o</code> for chat &amp; drafting, <code>text-embedding-3-large</code> for embeddings</td></tr>
+        <tr><td class="role">Data</td><td><code>PostgreSQL</code> (metadata + pgvector) <code>Azure Blob Storage</code> (generated file cache)</td></tr>
+        <tr><td class="role">Background jobs</td><td><code>Hangfire</code> + <code>Hangfire.PostgreSql</code> — recurring document sync every 5 minutes</td></tr>
+        <tr><td class="role">Platform</td><td><code>Teams App Manifest</code> (Tab) <code>Azure App Service</code> / <code>Container Apps</code> <code>Azure Key Vault</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:34px;">Local ⇄ production, side by side</h3>
+  <div class="env-compare">
+    <div class="env-card local">
+      <h4><span class="tag">Local</span> Ollama</h4>
+      <ul>
+        <li>Runs entirely on the developer's machine</li>
+        <li>Zero token cost while iterating on prompts</li>
+        <li>No customer data ever leaves the laptop</li>
+        <li>Selected by <code class="mono">Ai:Provider = "Ollama"</code> in <code class="mono">appsettings.Development.json</code></li>
+      </ul>
+    </div>
+    <div class="env-card prod">
+      <h4><span class="tag">Production</span> Azure OpenAI</h4>
+      <ul>
+        <li>Entra ID / managed-identity authenticated</li>
+        <li>Enterprise content filtering &amp; regional residency</li>
+        <li>Higher-quality generation for client-facing documents</li>
+        <li>Selected by <code class="mono">Ai:Provider = "AzureOpenAI"</code> in <code class="mono">appsettings.Production.json</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <p>The swap is one setting, resolved at startup by <code class="mono">SemanticKernelFactory</code> in <code class="mono">backend/src/BDCopilot.Infrastructure/Services/SemanticKernelFactory.cs</code> — it is never a client-side toggle, which is why Settings is read-only:</p>
+  <div class="codeblock">
+<span class="c">// backend/src/BDCopilot.Api/appsettings.Development.json</span><br/>
+&#123;<br/>
+&nbsp;&nbsp;<span class="k">"Ai"</span>: &#123;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">"Provider"</span>: <span class="s">"Ollama"</span>,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">"Ollama"</span>: &#123; <span class="k">"Endpoint"</span>: <span class="s">"http://localhost:11434"</span>, <span class="k">"ChatModel"</span>: <span class="s">"llama3.1:8b"</span>, <span class="k">"EmbeddingModel"</span>: <span class="s">"nomic-embed-text"</span> &#125;<br/>
+&nbsp;&nbsp;&#125;<br/>
+&#125;
+  </div>
+  <div class="codeblock">
+<span class="c">// backend/src/BDCopilot.Api/appsettings.Production.json</span><br/>
+&#123;<br/>
+&nbsp;&nbsp;<span class="k">"Ai"</span>: &#123;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">"Provider"</span>: <span class="s">"AzureOpenAI"</span>,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">"AzureOpenAI"</span>: &#123; <span class="k">"Endpoint"</span>: <span class="s">"https://bd-copilot.openai.azure.com"</span>, <span class="k">"ChatDeployment"</span>: <span class="s">"gpt-4o"</span>, <span class="k">"EmbeddingDeployment"</span>: <span class="s">"text-embedding-3-large"</span> &#125;<br/>
+&nbsp;&nbsp;&#125;<br/>
+&#125;
+  </div>
+
+  <h3>Metadata schema</h3>
+  <p class="m">Defined in <code class="mono">backend/src/BDCopilot.Core/Models/Document.cs</code> and <code class="mono">DocumentChunk.cs</code>, mapped by EF Core in <code class="mono">BdCopilotDbContext</code> — this is what every citation chip in Chat and Knowledge Search resolves against:</p>
+  <div class="codeblock">
+<span class="k">Documents</span><br/>
+&nbsp;&nbsp;Id · FileName · FileType · Owner · TeamsChannel · SharePointUrl<br/>
+&nbsp;&nbsp;CreatedAt · ModifiedAt · AclHash <span class="c">// revalidated live at query time, never trusted alone</span><br/>
+<br/>
+<span class="k">DocumentChunks</span><br/>
+&nbsp;&nbsp;Id · DocumentId (FK) · Content · Locator <span class="c">// e.g. "p.4", "Slide 12"</span><br/>
+&nbsp;&nbsp;Embedding <span class="k">vector(1536)</span> <span class="c">// Pgvector.Vector column, cosine-searched via .CosineDistance()</span>
+  </div>
+
+  <h3>Where to look in the repo</h3>
+  <p class="m">
+    Frontend workspace: <code class="mono">bd-copilot-web/</code> (Angular 20, standalone components, signals). API: <code class="mono">backend/src/BDCopilot.Api/</code> — run it and open <code class="mono">/swagger</code>. Domain models and interfaces: <code class="mono">backend/src/BDCopilot.Core/</code>. Real implementations (EF Core, Semantic Kernel, blob storage, Hangfire jobs): <code class="mono">backend/src/BDCopilot.Infrastructure/</code> and <code class="mono">backend/src/BDCopilot.SyncJobs/</code>.
+  </p>
+</div>

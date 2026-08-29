@@ -1,0 +1,50 @@
+name: bd-copilot
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: bd-copilot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bdcopilot
+      POSTGRES_USER: bdcopilot
+      POSTGRES_PASSWORD: CHANGE_ME
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./backend/database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bdcopilot -d bdcopilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: bd-copilot-azurite
+    restart: unless-stopped
+    command: "azurite --blobHost 0.0.0.0 --blobPort 10000 --location /data --debug /data/debug.log"
+    ports:
+      - "10000:10000"
+    volumes:
+      - azurite-data:/data
+
+  # Optional convenience container for local Ollama, if you'd rather run it in Docker
+  # than natively. Comment out (or `docker compose --profile ollama up`) if you already
+  # run `ollama serve` on the host — appsettings.Development.json defaults to
+  # http://localhost:11434 either way.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bd-copilot-ollama
+    restart: unless-stopped
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+
+volumes:
+  pg-data:
+  azurite-data:
+  ollama-data:

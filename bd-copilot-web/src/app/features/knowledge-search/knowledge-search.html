@@ -1,0 +1,95 @@
+<div class="panel-head">
+  <div>
+    <h2>Find &amp; reuse</h2>
+    <p>Search your indexed library, get a grounded answer with citations, then send language into an RFP or business case.</p>
+  </div>
+</div>
+
+<div class="field field--full" style="margin-bottom: 12px;">
+  <span class="field-label">Document source</span>
+  <div class="corpus-radios" role="radiogroup" aria-label="Document source">
+    <label class="corpus-radio">
+      <input type="radio" name="ks-corpus" value="Local" [checked]="corpusSource() === 'Local'" (change)="corpusSource.set('Local')" />
+      Local (docs folder)
+    </label>
+    <label class="corpus-radio">
+      <input type="radio" name="ks-corpus" value="Online" [checked]="corpusSource() === 'Online'" (change)="corpusSource.set('Online')" />
+      Online (SharePoint)
+    </label>
+  </div>
+</div>
+
+<div class="search-row">
+  <fluent-text-input
+    placeholder="e.g. security compliance for wealth RFP, ROI ranges, delivery timeline…"
+    [attr.value]="query()"
+    (input)="onInput($event)"
+    (keydown)="onKeydown($event)">
+  </fluent-text-input>
+  <fluent-button appearance="accent" [attr.disabled]="searching() ? true : null" (click)="search()">
+    {{ searching() ? 'Searching…' : 'Search' }}
+  </fluent-button>
+</div>
+
+@if (errorMessage()) {
+  <div class="error-banner">{{ errorMessage() }}</div>
+}
+
+@if (searching()) {
+  <div class="search-answer search-answer--loading" aria-live="polite">
+    Searching the corpus and drafting a grounded answer…
+  </div>
+}
+
+@if (answer(); as ans) {
+  <article class="search-answer">
+    <header class="search-answer__head">
+      <h3>Answer</h3>
+      @if (modelLabel()) {
+        <span class="search-answer__meta">{{ modelLabel() }}</span>
+      }
+    </header>
+    <p class="search-answer__body">{{ ans }}</p>
+    @if (citations().length) {
+      <div class="citations">
+        @for (c of citations(); track c.documentId + (c.locator ?? '')) {
+          <button
+            type="button"
+            class="cite cite--btn"
+            (click)="openCitation(c)"
+            [attr.title]="c.sharePointUrl ? 'Open source' : c.fileName">
+            📎 {{ c.fileName }}{{ c.locator ? ' · ' + c.locator : '' }}
+          </button>
+        }
+      </div>
+    }
+    <div class="search-answer__actions">
+      <fluent-button appearance="accent" (click)="useAnswerInRfp()">Use answer in RFP</fluent-button>
+      <fluent-button (click)="useAnswerInBusinessCase()">Use answer in Business Case</fluent-button>
+    </div>
+  </article>
+}
+
+@if (hasSearched() && !searching() && results().length) {
+  <h3 class="search-sources-title">Sources</h3>
+}
+
+@for (r of results(); track r.source.documentId + (r.source.locator ?? '') + r.excerpt.slice(0, 24)) {
+  <div class="result-card">
+    <div class="top">
+      <span>{{ r.source.fileName }}</span>
+      @if (r.source.locator) { <span class="loc">· {{ r.source.locator }}</span> }
+      <span class="score">{{ (r.score * 100).toFixed(0) }}% match</span>
+    </div>
+    <p>&ldquo;{{ r.excerpt }}&rdquo;</p>
+    <div class="result-card__actions">
+      <fluent-button appearance="accent" (click)="useInRfp(r)">Use in RFP</fluent-button>
+      <fluent-button (click)="useInBusinessCase(r)">Use in Business Case</fluent-button>
+      <fluent-button (click)="openSource(r)">Open file</fluent-button>
+    </div>
+  </div>
+}
+
+@if (hasSearched() && !searching() && results().length === 0 && !errorMessage()) {
+  <p style="color: var(--ink-muted); font-size: 13.5px;">No accessible results for that query.</p>
+}

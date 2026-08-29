@@ -1,0 +1,86 @@
+<div class="panel-head">
+  <div>
+    <h2>Document Library</h2>
+    <p>Indexed files from Local (docs folder) and Online (SharePoint). Choose a source filter, then index or sync.</p>
+  </div>
+</div>
+
+<div class="field field--full" style="margin-bottom: 12px;">
+  <span class="field-label">Show documents from</span>
+  <div class="corpus-radios" role="radiogroup" aria-label="Document source filter">
+    <label class="corpus-radio">
+      <input type="radio" name="lib-corpus" value="All" [checked]="corpusSource() === 'All'" (change)="setCorpus('All')" />
+      All
+    </label>
+    <label class="corpus-radio">
+      <input type="radio" name="lib-corpus" value="Local" [checked]="corpusSource() === 'Local'" (change)="setCorpus('Local')" />
+      Local
+    </label>
+    <label class="corpus-radio">
+      <input type="radio" name="lib-corpus" value="Online" [checked]="corpusSource() === 'Online'" (change)="setCorpus('Online')" />
+      Online
+    </label>
+  </div>
+</div>
+
+@if (syncHealth(); as health) {
+  <div class="sync-health-banner" [class.unhealthy]="!health.isHealthy">
+    <div class="sync-health-main">
+      <strong>{{ health.statusMessage }}</strong>
+      @if (health.lastSuccessAt) {
+        <span class="sync-meta">Last success: {{ health.lastSuccessAt | date: 'medium' }}</span>
+      }
+      <span class="sync-meta">{{ health.documentsIndexed }} documents indexed</span>
+    </div>
+    @if (health.lastError) {
+      <div class="sync-error">{{ health.lastError }}</div>
+    }
+    <div class="sync-actions">
+      <fluent-button [attr.disabled]="syncBusy() ? true : null" (click)="seedDocuments()">Seed pilot docs</fluent-button>
+      <fluent-button [attr.disabled]="syncBusy() ? true : null" (click)="indexLocalDocs()">
+        {{ syncBusy() ? 'Working…' : 'Index local docs' }}
+      </fluent-button>
+      <fluent-button appearance="accent" [attr.disabled]="syncBusy() ? true : null" (click)="runSync()">
+        {{ syncBusy() ? 'Working…' : 'Run SharePoint sync' }}
+      </fluent-button>
+    </div>
+  </div>
+}
+
+@if (errorMessage()) {
+  <div class="error-banner">{{ errorMessage() }}</div>
+}
+
+@if (loading()) {
+  <p style="color: var(--ink-muted); font-size: 13.5px;">Loading…</p>
+} @else if (documents().length === 0 && !errorMessage()) {
+  <p style="color: var(--ink-muted); font-size: 13.5px;">
+    No documents indexed yet — index local docs, seed pilot docs, or run SharePoint sync.
+  </p>
+} @else {
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>File</th><th>Type</th><th>Source</th><th>Channel</th><th>Modified</th><th>Access</th><th>Index status</th></tr>
+      </thead>
+      <tbody>
+        @for (doc of documents(); track doc.documentId) {
+          <tr>
+            <td>{{ doc.fileName }}</td>
+            <td><span class="filetag">.{{ doc.fileType }}</span></td>
+            <td>{{ doc.corpusSource || 'Online' }}</td>
+            <td>{{ doc.teamsChannel }}</td>
+            <td>{{ doc.modifiedDate | date: 'yyyy-MM-dd' }}</td>
+            <td>
+              <fluent-badge [attr.appearance]="doc.accessibleToCaller ? 'filled' : 'outline'"
+                            [attr.color]="doc.accessibleToCaller ? 'success' : 'danger'">
+                {{ doc.accessibleToCaller ? 'Readable' : 'Restricted' }}
+              </fluent-badge>
+            </td>
+            <td>{{ doc.indexStatus }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

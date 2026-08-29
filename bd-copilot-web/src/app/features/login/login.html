@@ -1,0 +1,25 @@
+<div class="panel-head">
+  <div>
+    <h2>Admin login</h2>
+    <p>Temporary local admin until Entra user management is connected. Default: <code>admin</code> / <code>admin123</code>.</p>
+  </div>
+</div>
+
+<div class="login-card">
+  <div class="field">
+    <label for="login-user">Username</label>
+    <input id="login-user" type="text" [(ngModel)]="username" autocomplete="username" />
+  </div>
+  <div class="field">
+    <label for="login-pass">Password</label>
+    <input id="login-pass" type="password" [(ngModel)]="password" autocomplete="current-password" (keydown.enter)="submit()" />
+  </div>
+
+  <fluent-button appearance="accent" [attr.disabled]="busy() ? true : null" (click)="submit()">
+    {{ busy() ? 'Signing in…' : 'Sign in' }}
+  </fluent-button>
+
+  @if (errorMessage()) {
+    <div class="error-banner" style="margin-top:14px;">{{ errorMessage() }}</div>
+  }
+</div>
