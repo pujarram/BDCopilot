@@ -1,8 +1,8 @@
 {
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.19/MicrosoftTeams.schema.json",
   "manifestVersion": "1.19",
-  "version": "0.1.0",
-  "id": "REPLACE_WITH_IKIONE_APP_CLIENT_ID",
+  "version": "0.1.1",
+  "id": "96c378fc-3d41-452c-85cb-f9f742f9c037",
   "developer": {
     "name": "Tieto",
     "websiteUrl": "https://www.tieto.com",
@@ -24,7 +24,7 @@
   "accentColor": "#021E57",
   "bots": [
     {
-      "botId": "REPLACE_WITH_IKIONE_APP_CLIENT_ID",
+      "botId": "96c378fc-3d41-452c-85cb-f9f742f9c037",
       "scopes": ["personal", "team", "groupchat"],
       "supportsFiles": false,
       "isNotificationOnly": false
@@ -34,39 +34,38 @@
     {
       "entityId": "bd-copilot-chat",
       "name": "Chat",
-      "contentUrl": "https://YOUR-NGROK-4200.ngrok-free.app/chat",
-      "websiteUrl": "https://YOUR-NGROK-4200.ngrok-free.app/chat",
+      "contentUrl": "https://starlight-majesty-salute.ngrok-free.dev/chat",
+      "websiteUrl": "https://starlight-majesty-salute.ngrok-free.dev/chat",
       "scopes": ["personal"]
     },
     {
       "entityId": "bd-copilot-rfp",
       "name": "RFP",
-      "contentUrl": "https://YOUR-NGROK-4200.ngrok-free.app/rfp",
-      "websiteUrl": "https://YOUR-NGROK-4200.ngrok-free.app/rfp",
+      "contentUrl": "https://starlight-majesty-salute.ngrok-free.dev/rfp",
+      "websiteUrl": "https://starlight-majesty-salute.ngrok-free.dev/rfp",
       "scopes": ["personal"]
     },
     {
       "entityId": "bd-copilot-search",
       "name": "Search",
-      "contentUrl": "https://YOUR-NGROK-4200.ngrok-free.app/search",
-      "websiteUrl": "https://YOUR-NGROK-4200.ngrok-free.app/search",
+      "contentUrl": "https://starlight-majesty-salute.ngrok-free.dev/search",
+      "websiteUrl": "https://starlight-majesty-salute.ngrok-free.dev/search",
       "scopes": ["personal"]
     },
     {
       "entityId": "bd-copilot-library",
       "name": "Library",
-      "contentUrl": "https://YOUR-NGROK-4200.ngrok-free.app/library",
-      "websiteUrl": "https://YOUR-NGROK-4200.ngrok-free.app/library",
+      "contentUrl": "https://starlight-majesty-salute.ngrok-free.dev/library",
+      "websiteUrl": "https://starlight-majesty-salute.ngrok-free.dev/library",
       "scopes": ["personal"]
     }
   ],
   "permissions": ["identity", "messageTeamMembers"],
   "validDomains": [
-    "YOUR-NGROK-4200.ngrok-free.app",
-    "YOUR-NGROK-5154.ngrok-free.app"
+    "starlight-majesty-salute.ngrok-free.dev"
   ],
   "webApplicationInfo": {
-    "id": "REPLACE_WITH_IKIONE_APP_CLIENT_ID",
-    "resource": "api://YOUR-NGROK-4200.ngrok-free.app/REPLACE_WITH_IKIONE_APP_CLIENT_ID"
+    "id": "96c378fc-3d41-452c-85cb-f9f742f9c037",
+    "resource": "api://starlight-majesty-salute.ngrok-free.dev/96c378fc-3d41-452c-85cb-f9f742f9c037"
   }
 }
