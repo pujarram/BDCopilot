@@ -206,6 +206,142 @@ export interface KnowledgeSearchResponse {
   model: string;
 }
 
+export interface PlannerHealthSummary {
+  totalTasks: number;
+  completed: number;
+  inProgress: number;
+  notStarted: number;
+  delayed: number;
+  completionPercent: number;
+  riskLevel: string;
+  statusMessage: string;
+  lastSyncAt?: string | null;
+  planCount: number;
+}
+
+export interface PlannerTaskListItem {
+  id: string;
+  graphTaskId: string;
+  title: string;
+  planTitle?: string | null;
+  bucketName?: string | null;
+  startDate?: string | null;
+  dueDate?: string | null;
+  percentComplete: number;
+  status: string;
+  assignedUsers?: string | null;
+  isDelayed: boolean;
+}
+
+export interface PlannerSyncResult {
+  plansUpserted: number;
+  bucketsUpserted: number;
+  tasksUpserted: number;
+  usedDemoSeed: boolean;
+  statusMessage: string;
+  errors: string[];
+}
+
+export interface PlannerWorkloadRow {
+  assignee: string;
+  totalTasks: number;
+  completed: number;
+  inProgress: number;
+  delayed: number;
+  avgPercentComplete: number;
+}
+
+export interface DelayPredictionItem {
+  taskId: string;
+  title: string;
+  assignee?: string | null;
+  bucketName?: string | null;
+  dueDate?: string | null;
+  percentComplete: number;
+  isAlreadyDelayed: boolean;
+  predictedSlipDays: number;
+  riskLevel: string;
+  rationale: string;
+}
+
+export interface ModuleAtRiskItem {
+  moduleName: string;
+  taskCount: number;
+  delayedCount: number;
+  incompleteCount: number;
+  avgPercentComplete: number;
+  riskLevel: string;
+  recommendation: string;
+}
+
+export interface StaffingRecommendation {
+  focus: string;
+  priority: string;
+  detail: string;
+}
+
+export interface ProjectManagerInsight {
+  healthScore: number;
+  riskLevel: string;
+  summary: string;
+  generatedAt: string;
+  delayPredictions: DelayPredictionItem[];
+  modulesAtRisk: ModuleAtRiskItem[];
+  staffingRecommendations: StaffingRecommendation[];
+}
+
+export interface StakeholderWeeklyReport {
+  title: string;
+  markdownBody: string;
+  healthScore: number;
+  riskLevel: string;
+  generatedAt: string;
+  usedLlmNarrative: boolean;
+  aiProvider?: string | null;
+  model?: string | null;
+}
+
+export interface PlannerBurndownPoint {
+  date: string;
+  totalTasks: number;
+  completed: number;
+  inProgress: number;
+  notStarted: number;
+  delayed: number;
+  completionPercent: number;
+  healthScore: number;
+}
+
+export interface UnifiedRelatedDocument {
+  fileName: string;
+  locator?: string | null;
+  excerpt?: string | null;
+  score: number;
+  matchedTaskTitle?: string | null;
+}
+
+export interface UnifiedIntelligenceRequest {
+  query?: string | null;
+  userObjectId: string;
+  includeDelayedTasks?: boolean;
+  includeSharePoint?: boolean;
+  useLlmSummary?: boolean;
+}
+
+export interface UnifiedIntelligenceResponse {
+  query?: string | null;
+  healthScore: number;
+  riskLevel: string;
+  managementSummary: string;
+  delayedTasks: PlannerTaskListItem[];
+  relatedDocuments: UnifiedRelatedDocument[];
+  staffingRecommendations: StaffingRecommendation[];
+  usedLlmSummary: boolean;
+  aiProvider?: string | null;
+  model?: string | null;
+  generatedAt: string;
+}
+
 export interface AiProviderStatus {
   provider: string;
   chatModel: string;

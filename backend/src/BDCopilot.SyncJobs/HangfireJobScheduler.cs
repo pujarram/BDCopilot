@@ -17,5 +17,15 @@ public static class HangfireJobScheduler
             recurringJobId: "document-sync",
             methodCall: job => job.RunAsync(),
             cronExpression: "*/5 * * * *");
+
+        recurringJobs.AddOrUpdate<PlannerSyncJob>(
+            recurringJobId: "planner-sync",
+            methodCall: job => job.RunAsync(),
+            cronExpression: "*/15 * * * *");
+
+        recurringJobs.AddOrUpdate<PlannerSnapshotJob>(
+            recurringJobId: "planner-snapshot",
+            methodCall: job => job.RunAsync(),
+            cronExpression: "0 6 * * *");
     }
 }

@@ -41,7 +41,8 @@ export class PrototypeShell {
       title: 'Explore',
       items: [
         { path: '/search', label: 'Find & reuse', icon: 'research' },
-        { path: '/library', label: 'Document Library', icon: 'portfolio' }
+        { path: '/library', label: 'Document Library', icon: 'portfolio' },
+        { path: '/projects', label: 'Project Intelligence', icon: 'scenarios' }
       ]
     },
     {

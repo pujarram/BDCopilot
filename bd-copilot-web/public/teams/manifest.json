@@ -1,8 +1,8 @@
 {
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.19/MicrosoftTeams.schema.json",
   "manifestVersion": "1.19",
-  "version": "0.1.1",
-  "id": "96c378fc-3d41-452c-85cb-f9f742f9c037",
+  "version": "0.1.2",
+  "id": "2088516d-bf3b-40d6-88b5-6acc44929b6d",
   "developer": {
     "name": "Tieto",
     "websiteUrl": "https://www.tieto.com",
@@ -24,7 +24,7 @@
   "accentColor": "#021E57",
   "bots": [
     {
-      "botId": "96c378fc-3d41-452c-85cb-f9f742f9c037",
+      "botId": "2088516d-bf3b-40d6-88b5-6acc44929b6d",
       "scopes": ["personal", "team", "groupchat"],
       "supportsFiles": false,
       "isNotificationOnly": false

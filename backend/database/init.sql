@@ -160,5 +160,61 @@ CREATE INDEX IF NOT EXISTS ix_generated_document_history_created_by ON generated
 CREATE INDEX IF NOT EXISTS ix_generated_document_history_created_at ON generated_document_history (created_at);
 CREATE INDEX IF NOT EXISTS ix_generated_document_history_generation_id ON generated_document_history (generation_id);
 
+-- Microsoft Planner snapshots (Project Intelligence Phase 1)
+CREATE TABLE IF NOT EXISTS planner_plans (
+    id              uuid PRIMARY KEY,
+    graph_plan_id   varchar(128) NOT NULL,
+    graph_group_id  varchar(128),
+    title           varchar(512) NOT NULL,
+    owner_name      varchar(256),
+    last_sync_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_planner_plans_graph_plan_id ON planner_plans (graph_plan_id);
+
+CREATE TABLE IF NOT EXISTS planner_buckets (
+    id               uuid PRIMARY KEY,
+    plan_id          uuid NOT NULL REFERENCES planner_plans (id) ON DELETE CASCADE,
+    graph_bucket_id  varchar(128) NOT NULL,
+    name             varchar(256) NOT NULL,
+    order_hint       int NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_planner_buckets_graph_bucket_id ON planner_buckets (graph_bucket_id);
+
+CREATE TABLE IF NOT EXISTS planner_tasks (
+    id                 uuid PRIMARY KEY,
+    plan_id            uuid NOT NULL REFERENCES planner_plans (id) ON DELETE CASCADE,
+    graph_task_id      varchar(128) NOT NULL,
+    graph_bucket_id    varchar(128),
+    title              varchar(512) NOT NULL,
+    description        text,
+    start_date         timestamptz,
+    due_date           timestamptz,
+    percent_complete   int NOT NULL DEFAULT 0,
+    bucket_name        varchar(256),
+    status             varchar(32) NOT NULL DEFAULT 'NotStarted',
+    assigned_users     varchar(1024),
+    is_delayed         boolean NOT NULL DEFAULT false,
+    last_sync_at       timestamptz NOT NULL DEFAULT now(),
+    graph_created_at   timestamptz,
+    graph_modified_at  timestamptz
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_planner_tasks_graph_task_id ON planner_tasks (graph_task_id);
+CREATE INDEX IF NOT EXISTS ix_planner_tasks_due_date ON planner_tasks (due_date);
+CREATE INDEX IF NOT EXISTS ix_planner_tasks_is_delayed ON planner_tasks (is_delayed);
+
+CREATE TABLE IF NOT EXISTS planner_task_snapshots (
+    id                  uuid PRIMARY KEY,
+    snapshot_date       date NOT NULL,
+    total_tasks         int NOT NULL DEFAULT 0,
+    completed           int NOT NULL DEFAULT 0,
+    in_progress         int NOT NULL DEFAULT 0,
+    not_started         int NOT NULL DEFAULT 0,
+    delayed             int NOT NULL DEFAULT 0,
+    completion_percent  double precision NOT NULL DEFAULT 0,
+    health_score        int NOT NULL DEFAULT 0,
+    captured_at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_planner_task_snapshots_date ON planner_task_snapshots (snapshot_date);
+
 -- Hangfire creates and owns its own "hangfire" schema automatically on first run
 -- (see Program.cs UseHangfireServer / Hangfire.PostgreSql) — nothing to do here for it.

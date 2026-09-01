@@ -19,11 +19,20 @@ import {
   LocalDocsSyncResult,
   KnowledgeSearchRequest,
   KnowledgeSearchResponse,
+  PlannerHealthSummary,
+  PlannerSyncResult,
+  PlannerTaskListItem,
+  PlannerWorkloadRow,
+  ProjectManagerInsight,
   ProposalGenerationRequest,
   ReindexRequest,
   RfpDocument,
   RfpDocumentListItem,
   RfpGenerationRequest,
+  StakeholderWeeklyReport,
+  UnifiedIntelligenceRequest,
+  UnifiedIntelligenceResponse,
+  PlannerBurndownPoint,
   RfpStreamEvent,
   AdminLoginResponse,
   SearchResultItem,
@@ -261,6 +270,58 @@ export class ApiService {
 
   syncLocalDocs(): Observable<LocalDocsSyncResult> {
     return this.http.post<LocalDocsSyncResult>(`${this.baseUrl}/sync/local-docs`, {});
+  }
+
+  getPlannerHealth(): Observable<PlannerHealthSummary> {
+    return this.http.get<PlannerHealthSummary>(`${this.baseUrl}/planner/health`);
+  }
+
+  listPlannerTasks(opts?: {
+    planId?: string;
+    delayedOnly?: boolean;
+    assignee?: string;
+    dueFrom?: string;
+    dueTo?: string;
+  }): Observable<PlannerTaskListItem[]> {
+    const params: Record<string, string> = {};
+    if (opts?.planId) params['planId'] = opts.planId;
+    if (opts?.delayedOnly) params['delayedOnly'] = 'true';
+    if (opts?.assignee) params['assignee'] = opts.assignee;
+    if (opts?.dueFrom) params['dueFrom'] = opts.dueFrom;
+    if (opts?.dueTo) params['dueTo'] = opts.dueTo;
+    return this.http.get<PlannerTaskListItem[]>(`${this.baseUrl}/planner/tasks`, { params });
+  }
+
+  getPlannerWorkload(): Observable<PlannerWorkloadRow[]> {
+    return this.http.get<PlannerWorkloadRow[]>(`${this.baseUrl}/planner/workload`);
+  }
+
+  getPlannerInsights(): Observable<ProjectManagerInsight> {
+    return this.http.get<ProjectManagerInsight>(`${this.baseUrl}/planner/insights`);
+  }
+
+  getPlannerStakeholderReport(useLlm = true): Observable<StakeholderWeeklyReport> {
+    return this.http.get<StakeholderWeeklyReport>(`${this.baseUrl}/planner/report`, {
+      params: { useLlm: String(useLlm) }
+    });
+  }
+
+  plannerReportDocxUrl(useLlm = true): string {
+    return `${this.baseUrl}/planner/report.docx?useLlm=${useLlm}`;
+  }
+
+  getPlannerBurndown(days = 30): Observable<PlannerBurndownPoint[]> {
+    return this.http.get<PlannerBurndownPoint[]>(`${this.baseUrl}/planner/burndown`, {
+      params: { days: String(days) }
+    });
+  }
+
+  queryUnifiedIntelligence(body: UnifiedIntelligenceRequest): Observable<UnifiedIntelligenceResponse> {
+    return this.http.post<UnifiedIntelligenceResponse>(`${this.baseUrl}/planner/unified`, body);
+  }
+
+  syncPlanner(): Observable<PlannerSyncResult> {
+    return this.http.post<PlannerSyncResult>(`${this.baseUrl}/planner/sync`, {});
   }
 
   approveGeneration(body: ApproveGenerationRequest): Observable<GeneratedDocument> {

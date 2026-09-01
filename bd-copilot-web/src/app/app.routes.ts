@@ -13,6 +13,7 @@ export const routes: Routes = [
       { path: 'proposal', loadComponent: () => import('./features/proposal-generator/proposal-generator').then(m => m.ProposalGenerator) },
       { path: 'search', loadComponent: () => import('./features/knowledge-search/knowledge-search').then(m => m.KnowledgeSearch) },
       { path: 'library', loadComponent: () => import('./features/document-library/document-library').then(m => m.DocumentLibrary) },
+      { path: 'projects', loadComponent: () => import('./features/project-intelligence/project-intelligence').then(m => m.ProjectIntelligence) },
       { path: 'settings', loadComponent: () => import('./features/settings/settings').then(m => m.Settings) },
       { path: 'login', loadComponent: () => import('./features/login/login').then(m => m.Login) },
       { path: 'admin', loadComponent: () => import('./features/admin/admin').then(m => m.Admin) },

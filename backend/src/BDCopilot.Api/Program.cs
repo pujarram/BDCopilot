@@ -29,6 +29,7 @@ builder.Services.Configure<AzureAiSearchSettings>(builder.Configuration.GetSecti
 builder.Services.Configure<AdminUserSettings>(builder.Configuration.GetSection(AdminUserSettings.SectionName));
 builder.Services.Configure<TeamsBotSettings>(builder.Configuration.GetSection(TeamsBotSettings.SectionName));
 builder.Services.Configure<LocalDocsSettings>(builder.Configuration.GetSection(LocalDocsSettings.SectionName));
+builder.Services.Configure<PlannerSyncSettings>(builder.Configuration.GetSection(PlannerSyncSettings.SectionName));
 
 var aiSettings = builder.Configuration.GetSection(AiSettings.SectionName).Get<AiSettings>() ?? new AiSettings();
 var azureAd = builder.Configuration.GetSection(AzureAdSettings.SectionName).Get<AzureAdSettings>() ?? new AzureAdSettings();
@@ -110,6 +111,10 @@ builder.Services.AddScoped<IAiChatService, AiChatService>();
 builder.Services.AddScoped<IDocumentGeneratorService, DocumentGeneratorService>();
 builder.Services.AddScoped<IDocumentSyncService, DocumentSyncService>();
 builder.Services.AddScoped<ILocalDocumentSyncService, LocalDocumentSyncService>();
+builder.Services.AddScoped<IPlannerSyncService, PlannerSyncService>();
+builder.Services.AddScoped<IPlannerSnapshotService, PlannerSnapshotService>();
+builder.Services.AddScoped<IProjectManagerService, ProjectManagerService>();
+builder.Services.AddScoped<IUnifiedIntelligenceService, UnifiedIntelligenceService>();
 builder.Services.AddScoped<IBlobStorageService, BlobStorageService>();
 builder.Services.AddScoped<IDocumentExportService, DocumentExportService>();
 builder.Services.AddScoped<IGenerationWorkflowService, GenerationWorkflowService>();
@@ -249,6 +254,61 @@ using (var scope = app.Services.CreateScope())
             CREATE INDEX IF NOT EXISTS ix_generated_document_history_created_by ON generated_document_history (created_by_user_object_id);
             CREATE INDEX IF NOT EXISTS ix_generated_document_history_created_at ON generated_document_history (created_at);
             CREATE INDEX IF NOT EXISTS ix_generated_document_history_generation_id ON generated_document_history (generation_id);
+
+            CREATE TABLE IF NOT EXISTS planner_plans (
+                id              uuid PRIMARY KEY,
+                graph_plan_id   varchar(128) NOT NULL,
+                graph_group_id  varchar(128),
+                title           varchar(512) NOT NULL,
+                owner_name      varchar(256),
+                last_sync_at    timestamptz NOT NULL DEFAULT now()
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_planner_plans_graph_plan_id ON planner_plans (graph_plan_id);
+
+            CREATE TABLE IF NOT EXISTS planner_buckets (
+                id               uuid PRIMARY KEY,
+                plan_id          uuid NOT NULL REFERENCES planner_plans (id) ON DELETE CASCADE,
+                graph_bucket_id  varchar(128) NOT NULL,
+                name             varchar(256) NOT NULL,
+                order_hint       int NOT NULL DEFAULT 0
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_planner_buckets_graph_bucket_id ON planner_buckets (graph_bucket_id);
+
+            CREATE TABLE IF NOT EXISTS planner_tasks (
+                id                 uuid PRIMARY KEY,
+                plan_id            uuid NOT NULL REFERENCES planner_plans (id) ON DELETE CASCADE,
+                graph_task_id      varchar(128) NOT NULL,
+                graph_bucket_id    varchar(128),
+                title              varchar(512) NOT NULL,
+                description        text,
+                start_date         timestamptz,
+                due_date           timestamptz,
+                percent_complete   int NOT NULL DEFAULT 0,
+                bucket_name        varchar(256),
+                status             varchar(32) NOT NULL DEFAULT 'NotStarted',
+                assigned_users     varchar(1024),
+                is_delayed         boolean NOT NULL DEFAULT false,
+                last_sync_at       timestamptz NOT NULL DEFAULT now(),
+                graph_created_at   timestamptz,
+                graph_modified_at  timestamptz
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_planner_tasks_graph_task_id ON planner_tasks (graph_task_id);
+            CREATE INDEX IF NOT EXISTS ix_planner_tasks_due_date ON planner_tasks (due_date);
+            CREATE INDEX IF NOT EXISTS ix_planner_tasks_is_delayed ON planner_tasks (is_delayed);
+
+            CREATE TABLE IF NOT EXISTS planner_task_snapshots (
+                id                  uuid PRIMARY KEY,
+                snapshot_date       date NOT NULL,
+                total_tasks         int NOT NULL DEFAULT 0,
+                completed           int NOT NULL DEFAULT 0,
+                in_progress         int NOT NULL DEFAULT 0,
+                not_started         int NOT NULL DEFAULT 0,
+                delayed             int NOT NULL DEFAULT 0,
+                completion_percent  double precision NOT NULL DEFAULT 0,
+                health_score        int NOT NULL DEFAULT 0,
+                captured_at         timestamptz NOT NULL DEFAULT now()
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_planner_task_snapshots_date ON planner_task_snapshots (snapshot_date);
             """;
         await cmd.ExecuteNonQueryAsync();
     }
@@ -272,6 +332,21 @@ using (var scope = app.Services.CreateScope())
         {
             var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("LocalDocsStartup");
             logger.LogWarning(ex, "Local docs index on startup failed.");
+        }
+    }
+
+    var plannerOpts = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<PlannerSyncSettings>>().Value;
+    if (plannerOpts.Enabled)
+    {
+        try
+        {
+            var planner = scope.ServiceProvider.GetRequiredService<IPlannerSyncService>();
+            await planner.SyncAsync();
+        }
+        catch (Exception ex)
+        {
+            var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("PlannerStartup");
+            logger.LogWarning(ex, "Planner sync on startup failed.");
         }
     }
 

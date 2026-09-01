@@ -5,8 +5,11 @@ Microsoft Teams app for **BD Copilot**: personal **tabs** (Chat / RFP / Search /
 | Field | Value |
 | --- | --- |
 | Tenant | `83928f87-96d8-4ebf-b095-7c3bf0c53193` (ikione.com) |
-| App / Bot ID | Same Entra **Application (client) ID** used for Graph sync (`Graph:ClientId`) |
+| Azure Bot (BDAgent) App ID | `2088516d-bf3b-40d6-88b5-6acc44929b6d` — use in manifest `id` + `botId` |
+| Graph / SSO App ID | `96c378fc-3d41-452c-85cb-f9f742f9c037` — `Graph:ClientId` + `webApplicationInfo.id` |
 | Messaging endpoint | `https://<api-ngrok>/api/channels/teams/messages` |
+
+**Do not** put the Graph client ID in `botId`. Teams “Invalid Bot” means `botId` ≠ Azure Bot Microsoft App ID.
 
 ## Contents
 
@@ -24,26 +27,28 @@ Replace every:
 
 | Placeholder | With |
 | --- | --- |
-| `REPLACE_WITH_IKIONE_APP_CLIENT_ID` | Entra Application (client) ID (must exist in tenant `83928f87-…`) |
+| Manifest `id` / `botId` | Azure Bot **Microsoft App ID** (`2088516d-…` for BDAgent) |
+| `webApplicationInfo.id` | Graph / SSO Entra app (`96c378fc-…`) |
 | `YOUR-NGROK-4200.ngrok-free.app` | ngrok host for Angular (`ngrok http 4200`) |
 | `YOUR-NGROK-5154.ngrok-free.app` | ngrok host for API (`ngrok http 5154`) — only needed in `validDomains` if tabs call that host |
 
-Also set API config:
+Also set API config (bot credentials = BDAgent app, **not** Graph):
 
 ```powershell
 cd backend\src\BDCopilot.Api
 dotnet user-secrets set "TeamsBot:Enabled" "true"
+dotnet user-secrets set "TeamsBot:MicrosoftAppId" "2088516d-bf3b-40d6-88b5-6acc44929b6d"
+dotnet user-secrets set "TeamsBot:MicrosoftAppPassword" "<BDAgent client secret Value>"
 dotnet user-secrets set "TeamsBot:WebBaseUrl" "https://YOUR-NGROK-4200.ngrok-free.app"
-# MicrosoftAppId / password fall back to Graph:ClientId + Graph:ClientSecret when empty
 ```
 
 `TeamsBot:Enabled` is already `true` in `appsettings.Development.json`.
 
-## 2. Azure Bot (same app id)
+## 2. Azure Bot (BDAgent)
 
-1. Azure Portal → create **Azure Bot** (or Bot Channels Registration).
-2. **Microsoft App ID** = your Ikione Application (client) ID (same as Graph).
-3. Create / paste the **client secret Value** (same secret as `Graph:ClientSecret`).
+1. Azure Portal → **BDAgent** (or create Azure Bot).
+2. **Microsoft App ID** = `2088516d-bf3b-40d6-88b5-6acc44929b6d` (must match manifest `botId`).
+3. Create / paste the **client secret Value** into `TeamsBot:MicrosoftAppPassword` (Graph secret stays on `Graph:ClientSecret`).
 4. Channels → enable **Microsoft Teams**.
 5. Configuration → **Messaging endpoint**:
    `https://<api-ngrok-host>/api/channels/teams/messages`

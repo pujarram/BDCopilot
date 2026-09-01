@@ -1,0 +1,340 @@
+<div class="panel-head">
+  <div>
+    <h2>Project Intelligence</h2>
+    <p>Planner-backed delivery views — health, Gantt, timeline, and team workload.</p>
+  </div>
+  <fluent-button appearance="accent" [attr.disabled]="syncBusy() ? true : null" (click)="sync()">
+    {{ syncBusy() ? 'Syncing…' : 'Sync Planner' }}
+  </fluent-button>
+</div>
+
+@if (errorMessage()) {
+  <div class="error-banner">{{ errorMessage() }}</div>
+}
+
+@if (health(); as h) {
+  <div class="pi-kpi-row">
+    <div class="pi-kpi">
+      <span class="pi-kpi__label">Completion</span>
+      <strong>{{ h.completionPercent }}%</strong>
+    </div>
+    <div class="pi-kpi">
+      <span class="pi-kpi__label">Total</span>
+      <strong>{{ h.totalTasks }}</strong>
+    </div>
+    <div class="pi-kpi">
+      <span class="pi-kpi__label">Done</span>
+      <strong>{{ h.completed }}</strong>
+    </div>
+    <div class="pi-kpi">
+      <span class="pi-kpi__label">In progress</span>
+      <strong>{{ h.inProgress }}</strong>
+    </div>
+    <div class="pi-kpi" [class.pi-kpi--warn]="h.delayed > 0">
+      <span class="pi-kpi__label">Delayed</span>
+      <strong>{{ h.delayed }}</strong>
+    </div>
+    <div class="pi-kpi">
+      <span class="pi-kpi__label">Risk</span>
+      <strong>{{ h.riskLevel }}</strong>
+    </div>
+  </div>
+  <p class="pi-status">{{ h.statusMessage }}
+    @if (h.lastSyncAt) {
+      · Last sync {{ h.lastSyncAt | date: 'medium' }}
+    }
+  </p>
+}
+
+<nav class="pi-tabs" aria-label="Project Intelligence views">
+  <button type="button" class="pi-tab" [class.is-active]="view() === 'overview'" (click)="setView('overview')">Overview</button>
+  <button type="button" class="pi-tab" [class.is-active]="view() === 'gantt'" (click)="setView('gantt')">Gantt</button>
+  <button type="button" class="pi-tab" [class.is-active]="view() === 'timeline'" (click)="setView('timeline')">Timeline</button>
+  <button type="button" class="pi-tab" [class.is-active]="view() === 'workload'" (click)="setView('workload')">Workload</button>
+  <button type="button" class="pi-tab" [class.is-active]="view() === 'insights'" (click)="setView('insights')">AI PM</button>
+  <button type="button" class="pi-tab" [class.is-active]="view() === 'burndown'" (click)="setView('burndown')">Burndown</button>
+  <button type="button" class="pi-tab" [class.is-active]="view() === 'unified'" (click)="setView('unified')">Unified</button>
+</nav>
+
+<div class="pi-toolbar">
+  <label class="corpus-radio">
+    <input type="checkbox" [checked]="delayedOnly()" (change)="toggleDelayed()" />
+    Delayed only
+  </label>
+  @if (assigneeFilter()) {
+    <span class="pi-filter-chip">Assignee: {{ assigneeFilter() }}</span>
+  }
+  @if (dueFrom() || dueTo()) {
+    <span class="pi-filter-chip">Due window set (from Teams / URL)</span>
+  }
+</div>
+
+@if (loading()) {
+  <p style="color: var(--ink-muted); font-size: 13.5px;">Loading…</p>
+} @else if (tasks().length === 0 && view() !== 'workload' && view() !== 'insights' && view() !== 'burndown' && view() !== 'unified') {
+  <p style="color: var(--ink-muted); font-size: 13.5px;">
+    No tasks yet — click <strong>Sync Planner</strong> (demo seed works without Graph Planner permissions).
+  </p>
+} @else {
+  @switch (view()) {
+    @case ('overview') {
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Bucket</th>
+              <th>Assignee</th>
+              <th>Start</th>
+              <th>Due</th>
+              <th>%</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (t of tasks(); track t.id) {
+              <tr [class.pi-row--delayed]="t.isDelayed">
+                <td>{{ t.title }}</td>
+                <td>{{ t.bucketName || '—' }}</td>
+                <td>{{ t.assignedUsers || '—' }}</td>
+                <td>{{ t.startDate ? (t.startDate | date: 'yyyy-MM-dd') : '—' }}</td>
+                <td>{{ t.dueDate ? (t.dueDate | date: 'yyyy-MM-dd') : '—' }}</td>
+                <td>{{ t.percentComplete }}%</td>
+                <td>
+                  @if (t.isDelayed) {
+                    <span class="pi-badge pi-badge--danger">Delayed</span>
+                  } @else {
+                    {{ t.status }}
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    @case ('gantt') {
+      @if (!ganttRows().length) {
+        <p style="color: var(--ink-muted); font-size: 13.5px;">Tasks need start or due dates to plot on the Gantt.</p>
+      } @else {
+        <div class="pi-gantt" role="img" aria-label="Gantt chart of Planner tasks">
+          <div class="pi-gantt__head">
+            <div class="pi-gantt__label-col">Task</div>
+            <div class="pi-gantt__track-col">
+              @for (m of ganttMarkers(); track m.label + m.leftPct) {
+                <span class="pi-gantt__marker" [style.left.%]="m.leftPct">{{ m.label }}</span>
+              }
+              @if (todayPct(); as tp) {
+                <span class="pi-gantt__today" [style.left.%]="tp" title="Today"></span>
+              }
+            </div>
+          </div>
+          @for (row of ganttRows(); track row.task.id) {
+            <div class="pi-gantt__row" [class.is-delayed]="row.task.isDelayed">
+              <div class="pi-gantt__label-col" [title]="row.task.title">{{ row.task.title }}</div>
+              <div class="pi-gantt__track-col">
+                @if (todayPct(); as tp) {
+                  <span class="pi-gantt__today" [style.left.%]="tp"></span>
+                }
+                <div
+                  class="pi-gantt__bar"
+                  [class.is-done]="row.task.percentComplete >= 100"
+                  [class.is-delayed]="row.task.isDelayed"
+                  [style.left.%]="row.leftPct"
+                  [style.width.%]="row.widthPct"
+                  [title]="row.task.title + ' · ' + row.task.percentComplete + '%'">
+                  <span class="pi-gantt__fill" [style.width.%]="row.task.percentComplete"></span>
+                  <span class="pi-gantt__bar-label">{{ row.label }}</span>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    }
+
+    @case ('timeline') {
+      <div class="pi-timeline">
+        @for (group of timelineGroups(); track group.bucket) {
+          <section class="pi-timeline__group">
+            <h3>{{ group.bucket }}</h3>
+            <ul>
+              @for (t of group.tasks; track t.id) {
+                <li [class.is-delayed]="t.isDelayed">
+                  <div class="pi-timeline__task">
+                    <strong>{{ t.title }}</strong>
+                    <span class="pi-timeline__meta">
+                      {{ t.assignedUsers || 'Unassigned' }}
+                      ·
+                      @if (t.startDate) { {{ t.startDate | date: 'MMM d' }} → }
+                      @if (t.dueDate) { {{ t.dueDate | date: 'MMM d' }} } @else { TBD }
+                      · {{ t.percentComplete }}%
+                    </span>
+                  </div>
+                  <div class="pi-timeline__rail">
+                    <div class="pi-timeline__progress" [style.width.%]="t.percentComplete"></div>
+                  </div>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+      </div>
+    }
+
+    @case ('workload') {
+      @if (!workload().length) {
+        <p style="color: var(--ink-muted); font-size: 13.5px;">No assignment data yet.</p>
+      } @else {
+        <div class="pi-workload">
+          @for (w of workload(); track w.assignee) {
+            <article class="pi-workload__card">
+              <header>
+                <h3>{{ w.assignee }}</h3>
+                <span>{{ w.avgPercentComplete }}% avg</span>
+              </header>
+              <div class="pi-workload__bar" aria-hidden="true">
+                <span class="is-done" [style.flex-grow]="w.completed || 0.001"></span>
+                <span class="is-wip" [style.flex-grow]="w.inProgress || 0.001"></span>
+                <span class="is-open" [style.flex-grow]="remaining(w) || 0.001"></span>
+              </div>
+              <dl>
+                <div><dt>Total</dt><dd>{{ w.totalTasks }}</dd></div>
+                <div><dt>Done</dt><dd>{{ w.completed }}</dd></div>
+                <div><dt>WIP</dt><dd>{{ w.inProgress }}</dd></div>
+                <div [class.is-warn]="w.delayed > 0"><dt>Delayed</dt><dd>{{ w.delayed }}</dd></div>
+              </dl>
+            </article>
+          }
+        </div>
+      }
+    }
+
+    @case ('insights') {
+      @if (insights(); as i) {
+        <div class="pi-insights">
+          <div class="pi-insights__hero">
+            <div>
+              <span class="pi-kpi__label">Health score</span>
+              <strong class="pi-insights__score">{{ i.healthScore }}/100</strong>
+            </div>
+            <div>
+              <span class="pi-kpi__label">Risk</span>
+              <strong>{{ i.riskLevel }}</strong>
+            </div>
+            <p>{{ i.summary }}</p>
+          </div>
+
+          <section>
+            <h3>Delay predictions</h3>
+            @if (!i.delayPredictions.length) {
+              <p class="pi-muted">No slip risks detected.</p>
+            } @else {
+              <ul class="pi-insights__list">
+                @for (p of i.delayPredictions; track p.taskId) {
+                  <li>
+                    <strong>[{{ p.riskLevel }}]</strong> {{ p.title }}
+                    <span> — ≈{{ p.predictedSlipDays }}d · {{ p.rationale }}</span>
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+
+          <section>
+            <h3>Modules at risk</h3>
+            @if (!i.modulesAtRisk.length) {
+              <p class="pi-muted">No modules flagged.</p>
+            } @else {
+              <ul class="pi-insights__list">
+                @for (m of i.modulesAtRisk; track m.moduleName) {
+                  <li>
+                    <strong>[{{ m.riskLevel }}]</strong> {{ m.moduleName }}
+                    ({{ m.delayedCount }}/{{ m.taskCount }} delayed) — {{ m.recommendation }}
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+
+          <section>
+            <h3>Staffing recommendations</h3>
+            <ul class="pi-insights__list">
+              @for (s of i.staffingRecommendations; track s.focus + s.detail) {
+                <li><strong>[{{ s.priority }}]</strong> {{ s.focus }} — {{ s.detail }}</li>
+              }
+            </ul>
+          </section>
+
+          <section class="pi-insights__report">
+            <h3>Stakeholder weekly report</h3>
+            <div class="pi-insights__actions">
+              <fluent-button appearance="accent" [attr.disabled]="reportBusy() ? true : null" (click)="loadReport()">
+                {{ reportBusy() ? 'Generating…' : 'Generate report' }}
+              </fluent-button>
+              <fluent-button appearance="outline" (click)="downloadReportDocx()">Download DOCX</fluent-button>
+            </div>
+            @if (report(); as r) {
+              <pre class="pi-insights__md">{{ r.markdownBody }}</pre>
+              @if (r.usedLlmNarrative) {
+                <p class="pi-muted">Narrative via {{ r.aiProvider }}/{{ r.model }}</p>
+              }
+            }
+          </section>
+        </div>
+      } @else {
+        <p style="color: var(--ink-muted); font-size: 13.5px;">Loading AI Project Manager insights…</p>
+      }
+    }
+
+    @case ('burndown') {
+      @if (!burndown().length) {
+        <p class="pi-muted">No snapshot history yet — run <strong>Sync Planner</strong> daily to build trends.</p>
+      } @else {
+        <div class="pi-burndown">
+          @for (p of burndown(); track p.date) {
+            <div class="pi-burndown__row">
+              <span class="pi-burndown__date">{{ p.date }}</span>
+              <div class="pi-burndown__bar" aria-hidden="true">
+                <span class="is-done" [style.width.%]="(p.completed / burndownMaxCompleted()) * 100"></span>
+              </div>
+              <span class="pi-burndown__meta">{{ p.completed }}/{{ p.totalTasks }} · {{ p.completionPercent }}% · H{{ p.healthScore }}</span>
+            </div>
+          }
+        </div>
+      }
+    }
+
+    @case ('unified') {
+      <section class="pi-unified">
+        <p class="pi-muted">One query across delayed Planner tasks, related SharePoint docs, owners, and a management brief.</p>
+        <div class="pi-unified__form">
+          <input
+            type="text"
+            placeholder="Optional focus, e.g. wealth RFP delays"
+            [value]="unifiedQuery()"
+            (input)="unifiedQuery.set(($any($event.target)).value)"
+          />
+          <fluent-button appearance="accent" [attr.disabled]="unifiedBusy() ? true : null" (click)="runUnified()">
+            {{ unifiedBusy() ? 'Running…' : 'Run unified query' }}
+          </fluent-button>
+        </div>
+        @if (unified(); as u) {
+          <div class="pi-unified__result">
+            <p><strong>Health {{ u.healthScore }}/100</strong> · Risk {{ u.riskLevel }}</p>
+            <pre class="pi-insights__md">{{ u.managementSummary }}</pre>
+            @if (u.relatedDocuments.length) {
+              <h4>Related documents</h4>
+              <ul class="pi-insights__list">
+                @for (d of u.relatedDocuments; track d.fileName + (d.matchedTaskTitle || '')) {
+                  <li>{{ d.fileName }} — for <em>{{ d.matchedTaskTitle }}</em></li>
+                }
+              </ul>
+            }
+          </div>
+        }
+      </section>
+    }
+  }
+}

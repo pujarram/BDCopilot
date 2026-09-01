@@ -25,6 +25,10 @@ public class BdCopilotDbContext : DbContext
     public DbSet<AccessAuditRecord> AccessAuditRecords => Set<AccessAuditRecord>();
     public DbSet<RfpDocument> RfpDocuments => Set<RfpDocument>();
     public DbSet<GeneratedDocumentHistory> GeneratedDocumentHistories => Set<GeneratedDocumentHistory>();
+    public DbSet<PlannerPlan> PlannerPlans => Set<PlannerPlan>();
+    public DbSet<PlannerBucket> PlannerBuckets => Set<PlannerBucket>();
+    public DbSet<PlannerTaskItem> PlannerTasks => Set<PlannerTaskItem>();
+    public DbSet<PlannerTaskSnapshot> PlannerTaskSnapshots => Set<PlannerTaskSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -180,6 +184,75 @@ public class BdCopilotDbContext : DbContext
             e.HasIndex(r => r.CreatedByUserObjectId);
             e.HasIndex(r => r.CreatedAt);
             e.HasIndex(r => r.GenerationId);
+        });
+
+        modelBuilder.Entity<PlannerPlan>(e =>
+        {
+            e.ToTable("planner_plans");
+            e.HasKey(p => p.Id);
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.GraphPlanId).HasColumnName("graph_plan_id").IsRequired().HasMaxLength(128);
+            e.Property(p => p.GraphGroupId).HasColumnName("graph_group_id").HasMaxLength(128);
+            e.Property(p => p.Title).HasColumnName("title").IsRequired().HasMaxLength(512);
+            e.Property(p => p.OwnerName).HasColumnName("owner_name").HasMaxLength(256);
+            e.Property(p => p.LastSyncAt).HasColumnName("last_sync_at");
+            e.HasIndex(p => p.GraphPlanId).IsUnique();
+            e.HasMany(p => p.Buckets).WithOne(b => b.Plan).HasForeignKey(b => b.PlanId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(p => p.Tasks).WithOne(t => t.Plan).HasForeignKey(t => t.PlanId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PlannerBucket>(e =>
+        {
+            e.ToTable("planner_buckets");
+            e.HasKey(b => b.Id);
+            e.Property(b => b.Id).HasColumnName("id");
+            e.Property(b => b.PlanId).HasColumnName("plan_id");
+            e.Property(b => b.GraphBucketId).HasColumnName("graph_bucket_id").IsRequired().HasMaxLength(128);
+            e.Property(b => b.Name).HasColumnName("name").IsRequired().HasMaxLength(256);
+            e.Property(b => b.OrderHint).HasColumnName("order_hint");
+            e.HasIndex(b => b.GraphBucketId).IsUnique();
+        });
+
+        modelBuilder.Entity<PlannerTaskItem>(e =>
+        {
+            e.ToTable("planner_tasks");
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Id).HasColumnName("id");
+            e.Property(t => t.PlanId).HasColumnName("plan_id");
+            e.Property(t => t.GraphTaskId).HasColumnName("graph_task_id").IsRequired().HasMaxLength(128);
+            e.Property(t => t.GraphBucketId).HasColumnName("graph_bucket_id").HasMaxLength(128);
+            e.Property(t => t.Title).HasColumnName("title").IsRequired().HasMaxLength(512);
+            e.Property(t => t.Description).HasColumnName("description");
+            e.Property(t => t.StartDate).HasColumnName("start_date");
+            e.Property(t => t.DueDate).HasColumnName("due_date");
+            e.Property(t => t.PercentComplete).HasColumnName("percent_complete");
+            e.Property(t => t.BucketName).HasColumnName("bucket_name").HasMaxLength(256);
+            e.Property(t => t.Status).HasColumnName("status").HasMaxLength(32);
+            e.Property(t => t.AssignedUsers).HasColumnName("assigned_users").HasMaxLength(1024);
+            e.Property(t => t.IsDelayed).HasColumnName("is_delayed");
+            e.Property(t => t.LastSyncAt).HasColumnName("last_sync_at");
+            e.Property(t => t.GraphCreatedAt).HasColumnName("graph_created_at");
+            e.Property(t => t.GraphModifiedAt).HasColumnName("graph_modified_at");
+            e.HasIndex(t => t.GraphTaskId).IsUnique();
+            e.HasIndex(t => t.DueDate);
+            e.HasIndex(t => t.IsDelayed);
+        });
+
+        modelBuilder.Entity<PlannerTaskSnapshot>(e =>
+        {
+            e.ToTable("planner_task_snapshots");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasColumnName("id");
+            e.Property(s => s.SnapshotDate).HasColumnName("snapshot_date");
+            e.Property(s => s.TotalTasks).HasColumnName("total_tasks");
+            e.Property(s => s.Completed).HasColumnName("completed");
+            e.Property(s => s.InProgress).HasColumnName("in_progress");
+            e.Property(s => s.NotStarted).HasColumnName("not_started");
+            e.Property(s => s.Delayed).HasColumnName("delayed");
+            e.Property(s => s.CompletionPercent).HasColumnName("completion_percent");
+            e.Property(s => s.HealthScore).HasColumnName("health_score");
+            e.Property(s => s.CapturedAt).HasColumnName("captured_at");
+            e.HasIndex(s => s.SnapshotDate).IsUnique();
         });
     }
 }

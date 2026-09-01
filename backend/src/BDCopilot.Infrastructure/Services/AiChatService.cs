@@ -50,7 +50,15 @@ public class AiChatService : IAiChatService
             hits = [];
         }
 
-        return await GroundedAnswerAsync(SystemPrompt, request.Message, hits, request.History, ct);
+        var system = string.IsNullOrWhiteSpace(request.ExtraContext)
+            ? SystemPrompt
+            : SystemPrompt + """
+
+                When PLANNER_SNAPSHOT is present in the user message, prefer those live Planner facts
+                for schedule, assignees, delays, and health. Use SharePoint SOURCES for related documents.
+                """;
+
+        return await GroundedAnswerAsync(system, request.Message, hits, request.History, request.ExtraContext, ct);
     }
 
     public async Task<KnowledgeSearchResponse> SearchAndAnswerAsync(
@@ -97,7 +105,7 @@ public class AiChatService : IAiChatService
             };
         }
 
-        var chat = await GroundedAnswerAsync(searchSystemPrompt, request.Query, hits, history: null, ct);
+        var chat = await GroundedAnswerAsync(searchSystemPrompt, request.Query, hits, history: null, extraContext: null, ct);
 
         return new KnowledgeSearchResponse
         {
@@ -115,6 +123,7 @@ public class AiChatService : IAiChatService
         string question,
         List<SearchResultItem> hits,
         List<ChatTurn>? history,
+        string? extraContext,
         CancellationToken ct)
     {
         var kernel = _kernelFactory.CreateKernel();
@@ -128,7 +137,7 @@ public class AiChatService : IAiChatService
             else chatHistory.AddUserMessage(turn.Content);
         }
 
-        chatHistory.AddUserMessage(BuildGroundedPrompt(question, hits));
+        chatHistory.AddUserMessage(BuildGroundedPrompt(question, hits, extraContext));
 
         try
         {
@@ -160,11 +169,21 @@ public class AiChatService : IAiChatService
         }
     }
 
-    private static string BuildGroundedPrompt(string question, IEnumerable<SearchResultItem> hits)
+    private static string BuildGroundedPrompt(
+        string question,
+        IEnumerable<SearchResultItem> hits,
+        string? extraContext = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"QUESTION: {question}");
         sb.AppendLine();
+        if (!string.IsNullOrWhiteSpace(extraContext))
+        {
+            sb.AppendLine("PLANNER_SNAPSHOT:");
+            sb.AppendLine(extraContext.Trim());
+            sb.AppendLine();
+        }
+
         sb.AppendLine("SOURCES:");
         var i = 1;
         foreach (var hit in hits)

@@ -9,6 +9,12 @@ public class ChatRequest
 
     /// <summary>Entra ID object id of the calling user — required for ACL-filtered retrieval.</summary>
     public required string UserObjectId { get; set; }
+
+    /// <summary>
+    /// Optional Planner / project snapshot injected into the grounded prompt
+    /// (Teams bot Project Intelligence NL).
+    /// </summary>
+    public string? ExtraContext { get; set; }
 }
 
 public class ChatTurn
