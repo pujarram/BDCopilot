@@ -1,5 +1,5 @@
 <div class="app-shell">
-  <nav id="app-nav" class="rail" [class.is-open]="menuOpen()">
+  <nav id="app-nav" class="rail rail--enterprise" [class.is-open]="menuOpen()">
     @for (section of nav; track section.title) {
       <div class="rail-label">{{ section.title }}</div>
       @for (item of section.items; track item.path) {

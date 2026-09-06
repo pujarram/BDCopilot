@@ -98,10 +98,24 @@ public sealed class TeamsBotConnector : ITeamsBotConnector
         {
             foreach (var reply in replies)
             {
+                object?[]? attachments = null;
+                if (reply.AdaptiveCard is not null)
+                {
+                    attachments =
+                    [
+                        new
+                        {
+                            contentType = "application/vnd.microsoft.card.adaptive",
+                            content = reply.AdaptiveCard
+                        }
+                    ];
+                }
+
                 await PostActivityAsync(inbound, new
                 {
                     type = "message",
                     text = reply.Text,
+                    attachments,
                     from = new { id = inbound.Recipient!.Id, name = inbound.Recipient.Name },
                     recipient = new { id = inbound.From?.Id, name = inbound.From?.Name },
                     conversation = new { id = inbound.Conversation!.Id },

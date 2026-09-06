@@ -22,9 +22,14 @@ interface NavSection {
 })
 export class PrototypeShell {
   private readonly menuState = inject(MenuStateService);
+
   protected readonly menuOpen = this.menuState.open;
 
   protected readonly nav: NavSection[] = [
+    {
+      title: 'Home',
+      items: [{ path: '/dashboard', label: 'Dashboard', icon: 'portfolio' }]
+    },
     {
       title: 'Copilot',
       items: [{ path: '/chat', label: 'Chat', icon: 'copilot' }]
@@ -46,10 +51,9 @@ export class PrototypeShell {
       ]
     },
     {
-      title: 'Admin',
+      title: 'Operations',
       items: [
-        { path: '/login', label: 'Login', icon: 'advisor' },
-        { path: '/admin', label: 'Admin', icon: 'admin' },
+        { path: '/admin', label: 'Admin Console', icon: 'admin' },
         { path: '/settings', label: 'Settings', icon: 'settings' }
       ]
     },

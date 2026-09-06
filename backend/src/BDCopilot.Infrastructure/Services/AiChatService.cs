@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using BDCopilot.Core.Interfaces;
 using BDCopilot.Core.Models;
@@ -21,17 +22,20 @@ public class AiChatService : IAiChatService
 
     private readonly ISemanticKernelFactory _kernelFactory;
     private readonly IVectorSearchService _vectorSearch;
+    private readonly ITokenUsageTracker _tokenUsage;
     private readonly AiSettings _settings;
     private readonly ILogger<AiChatService> _logger;
 
     public AiChatService(
         ISemanticKernelFactory kernelFactory,
         IVectorSearchService vectorSearch,
+        ITokenUsageTracker tokenUsage,
         IOptions<AiSettings> settings,
         ILogger<AiChatService> logger)
     {
         _kernelFactory = kernelFactory;
         _vectorSearch = vectorSearch;
+        _tokenUsage = tokenUsage;
         _settings = settings.Value;
         _logger = logger;
     }
@@ -58,7 +62,9 @@ public class AiChatService : IAiChatService
                 for schedule, assignees, delays, and health. Use SharePoint SOURCES for related documents.
                 """;
 
-        return await GroundedAnswerAsync(system, request.Message, hits, request.History, request.ExtraContext, ct);
+        return await GroundedAnswerAsync(
+            system, request.Message, hits, request.History, request.ExtraContext,
+            "Chat", request.UserObjectId, ct);
     }
 
     public async Task<KnowledgeSearchResponse> SearchAndAnswerAsync(
@@ -105,7 +111,9 @@ public class AiChatService : IAiChatService
             };
         }
 
-        var chat = await GroundedAnswerAsync(searchSystemPrompt, request.Query, hits, history: null, extraContext: null, ct);
+        var chat = await GroundedAnswerAsync(
+            searchSystemPrompt, request.Query, hits, history: null, extraContext: null,
+            "Search", request.UserObjectId, ct);
 
         return new KnowledgeSearchResponse
         {
@@ -124,10 +132,15 @@ public class AiChatService : IAiChatService
         List<SearchResultItem> hits,
         List<ChatTurn>? history,
         string? extraContext,
+        string operation,
+        string userObjectId,
         CancellationToken ct)
     {
         var kernel = _kernelFactory.CreateKernel();
         var chat = kernel.GetRequiredService<IChatCompletionService>();
+        var model = _settings.Provider == "AzureOpenAI"
+            ? _settings.AzureOpenAI.ChatDeployment
+            : _settings.Ollama.ChatModel;
 
         var chatHistory = new ChatHistory(systemPrompt);
         foreach (var turn in history ?? [])
@@ -141,16 +154,36 @@ public class AiChatService : IAiChatService
 
         try
         {
+            var sw = Stopwatch.StartNew();
             var reply = await chat.GetChatMessageContentAsync(chatHistory, kernel: kernel, cancellationToken: ct);
+            sw.Stop();
+
+            var (promptTokens, completionTokens) = ExtractUsage(reply);
+            try
+            {
+                await _tokenUsage.TrackAsync(new TokenUsageRecord
+                {
+                    UserObjectId = string.IsNullOrWhiteSpace(userObjectId) ? "anonymous" : userObjectId,
+                    Operation = operation,
+                    Provider = _settings.Provider,
+                    Model = model,
+                    PromptTokens = promptTokens,
+                    CompletionTokens = completionTokens,
+                    TotalTokens = promptTokens + completionTokens,
+                    DurationMs = (int)Math.Min(sw.ElapsedMilliseconds, int.MaxValue)
+                }, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Token usage tracking failed (non-fatal).");
+            }
 
             return new ChatResponse
             {
                 Answer = reply.Content ?? string.Empty,
                 Citations = hits.Select(h => h.Source).ToList(),
                 AiProvider = _settings.Provider,
-                Model = _settings.Provider == "AzureOpenAI"
-                    ? _settings.AzureOpenAI.ChatDeployment
-                    : _settings.Ollama.ChatModel
+                Model = model
             };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -159,15 +192,43 @@ public class AiChatService : IAiChatService
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException)
         {
-            var model = _settings.Provider == "AzureOpenAI"
-                ? _settings.AzureOpenAI.ChatDeployment
-                : _settings.Ollama.ChatModel;
             throw new InvalidOperationException(
                 $"AI provider unreachable or timed out (provider={_settings.Provider}, model={model}). " +
                 "Confirm Ollama is running at Ai:Ollama:Endpoint and the chat model is pulled.",
                 ex);
         }
     }
+
+    private static (int Prompt, int Completion) ExtractUsage(ChatMessageContent reply)
+    {
+        try
+        {
+            if (reply.Metadata is null) return (0, 0);
+            if (reply.Metadata.TryGetValue("Usage", out var usageObj) && usageObj is not null)
+            {
+                var type = usageObj.GetType();
+                var prompt = type.GetProperty("InputTokenCount")?.GetValue(usageObj)
+                             ?? type.GetProperty("PromptTokens")?.GetValue(usageObj);
+                var completion = type.GetProperty("OutputTokenCount")?.GetValue(usageObj)
+                                 ?? type.GetProperty("CompletionTokens")?.GetValue(usageObj);
+                return (ToInt(prompt), ToInt(completion));
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+
+        return (0, 0);
+    }
+
+    private static int ToInt(object? value) =>
+        value switch
+        {
+            int i => i,
+            long l => (int)Math.Min(l, int.MaxValue),
+            _ => 0
+        };
 
     private static string BuildGroundedPrompt(
         string question,

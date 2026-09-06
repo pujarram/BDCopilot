@@ -47,11 +47,12 @@ public class TokenUsageTracker : ITokenUsageTracker
                 ["Operation"] = record.Operation,
                 ["Provider"] = record.Provider,
                 ["Model"] = record.Model
-            }, new Dictionary<string, double>
+            },             new Dictionary<string, double>
             {
                 ["PromptTokens"] = record.PromptTokens,
                 ["CompletionTokens"] = record.CompletionTokens,
-                ["TotalTokens"] = record.TotalTokens
+                ["TotalTokens"] = record.TotalTokens,
+                ["DurationMs"] = record.DurationMs
             });
         }
         catch (Exception ex)

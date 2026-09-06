@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { TeamsService } from './core/services/teams.service';
+import { AuthService } from './core/services/auth.service';
 import { Toast } from './shell/toast/toast';
 import { MenuStateService } from './core/services/menu-state.service';
 import { TietoIconComponent } from './shared/tieto-icon.component';
@@ -16,14 +17,26 @@ const DOC_PREFIXES = ['/architecture', '/stack', '/roadmap'];
 })
 export class App implements OnInit {
   private readonly teams = inject(TeamsService);
+  private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly menuState = inject(MenuStateService);
 
-  protected readonly user = this.teams.user;
+  protected readonly authService = this.auth;
   protected readonly menuOpen = this.menuState.open;
   protected readonly isPrototypeRoute = signal(true);
+  protected readonly isLoginRoute = signal(false);
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
+    try {
+      const fromRedirect = await this.auth.handleRedirect();
+      if (fromRedirect && this.auth.isLoggedIn()) {
+        this.teams.applyAuthIdentity();
+        void this.router.navigateByUrl('/dashboard');
+      }
+    } catch (err) {
+      console.warn('MSAL redirect handling failed', err);
+    }
+
     void this.teams.initialize();
     this.syncRoute(this.router.url);
     this.router.events
@@ -42,8 +55,14 @@ export class App implements OnInit {
     this.menuState.close();
   }
 
+  protected signOut(): void {
+    this.auth.logout();
+    void this.router.navigateByUrl('/login');
+  }
+
   private syncRoute(url: string): void {
     const path = url.split('?')[0];
+    this.isLoginRoute.set(path === '/login');
     this.isPrototypeRoute.set(!DOC_PREFIXES.some(p => path.startsWith(p)));
   }
 }

@@ -91,7 +91,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
             var plannerReply = await TryPlannerCommandAsync(text, userObjectId, ct);
             if (plannerReply is not null)
             {
-                return [new TeamsReply { Text = plannerReply }];
+                return [plannerReply];
             }
 
             return [new TeamsReply { Text = await ChatAsync(text, userObjectId, extraContext: null, ct) }];
@@ -109,36 +109,41 @@ public sealed class TeamsChannelService : ITeamsChannelService
         }
     }
 
-    private async Task<string?> TryPlannerCommandAsync(string text, string userObjectId, CancellationToken ct)
+    private async Task<TeamsReply?> TryPlannerCommandAsync(string text, string userObjectId, CancellationToken ct)
     {
         var lower = text.ToLowerInvariant();
 
         if (IsExactOrStarts(lower, "projects", "planner", "dashboard"))
         {
-            return $"**Project Intelligence** dashboard:\n{TabUrl("/projects")}\n\n"
-                   + "Try: `delayed`, `workload`, `sprint`, `due next week`, or `tasks for <name>`.";
+            return Reply(
+                $"**Project Intelligence** dashboard:\n{TabUrl("/projects")}\n\n"
+                + "Try: `delayed`, `workload`, `sprint`, `due next week`, or `tasks for <name>`.");
         }
 
         if (IsExactOrContains(lower, "delayed", "overdue")
             && !LooksLikeDocQuestion(lower))
         {
             var tasks = await _planner.ListTasksAsync(delayedOnly: true, ct: ct);
-            return FormatTaskList(
-                "**Delayed tasks**",
-                tasks,
-                TabUrl("/projects?view=overview&delayedOnly=true"));
+            var dash = TabUrl("/projects?view=overview&delayedOnly=true");
+            var textBody = FormatTaskList("**Delayed tasks**", tasks, dash);
+            var top = tasks.Count == 0
+                ? "No delayed tasks."
+                : string.Join("; ", tasks.Take(4).Select(t => t.Title));
+            return Reply(
+                textBody,
+                TeamsAdaptiveCardBuilder.DelayedTasksCard(tasks.Count, top, dash));
         }
 
         if (IsExactOrContains(lower, "workload", "team load", "capacity"))
         {
             var rows = await _planner.GetWorkloadAsync(ct);
-            return FormatWorkload(rows, TabUrl("/projects?view=workload"));
+            return Reply(FormatWorkload(rows, TabUrl("/projects?view=workload")));
         }
 
         if (lower is "report" or "weekly report" or "stakeholder report"
             || (IsExactOrContains(lower, "weekly report", "stakeholder report") && LooksLikeProjectIntent(lower)))
         {
-            return await FormatStakeholderReportAsync(userObjectId, ct);
+            return Reply(await FormatStakeholderReportAsync(userObjectId, ct));
         }
 
         if (lower is "unified" or "brief" or "management brief"
@@ -172,7 +177,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
             var (from, to, label) = ResolveDueWindow(lower);
             var tasks = await _planner.ListTasksAsync(dueFrom: from, dueTo: to, ct: ct);
             var qs = $"view=overview&dueFrom={Uri.EscapeDataString(from.ToString("o"))}&dueTo={Uri.EscapeDataString(to.ToString("o"))}";
-            return FormatTaskList($"**Tasks {label}**", tasks, TabUrl($"/projects?{qs}"));
+            return Reply(FormatTaskList($"**Tasks {label}**", tasks, TabUrl($"/projects?{qs}")));
         }
 
         var assigneeMatch = AssigneeCommand.Match(text);
@@ -180,10 +185,10 @@ public sealed class TeamsChannelService : ITeamsChannelService
         {
             var name = assigneeMatch.Groups[1].Value.Trim();
             var tasks = await _planner.ListTasksAsync(assigneeContains: name, ct: ct);
-            return FormatTaskList(
+            return Reply(FormatTaskList(
                 $"**Tasks for** _{name}_",
                 tasks,
-                TabUrl($"/projects?view=overview&assignee={Uri.EscapeDataString(name)}"));
+                TabUrl($"/projects?view=overview&assignee={Uri.EscapeDataString(name)}")));
         }
 
         // Free-form project NL: ground on Planner snapshot + optional SharePoint hits.
@@ -191,13 +196,16 @@ public sealed class TeamsChannelService : ITeamsChannelService
         {
             var snapshot = await BuildPlannerSnapshotAsync(ct);
             var answer = await ChatAsync(text, userObjectId, snapshot, ct);
-            return answer + $"\n\nOpen dashboard: {TabUrl("/projects")}";
+            return Reply(answer + $"\n\nOpen dashboard: {TabUrl("/projects")}");
         }
 
         return null;
     }
 
-    private async Task<string> FormatUnifiedAsync(string? query, string userObjectId, CancellationToken ct)
+    private static TeamsReply Reply(string text, object? adaptiveCard = null) =>
+        new() { Text = text, AdaptiveCard = adaptiveCard };
+
+    private async Task<TeamsReply> FormatUnifiedAsync(string? query, string userObjectId, CancellationToken ct)
     {
         var result = await _unified.QueryAsync(new UnifiedIntelligenceRequest
         {
@@ -233,10 +241,19 @@ public sealed class TeamsChannelService : ITeamsChannelService
 
         sb.AppendLine();
         sb.AppendLine($"Dashboard: {TabUrl("/projects?view=unified")}");
-        return sb.ToString();
+        var dash = TabUrl("/projects?view=unified");
+        return Reply(
+            sb.ToString(),
+            TeamsAdaptiveCardBuilder.UnifiedBriefCard(
+                result.HealthScore,
+                result.RiskLevel,
+                result.ManagementSummary,
+                result.DelayedTasks.Count,
+                result.RelatedDocuments.Count,
+                dash));
     }
 
-    private async Task<string> FormatInsightsAsync(CancellationToken ct)
+    private async Task<TeamsReply> FormatInsightsAsync(CancellationToken ct)
     {
         var insight = await _projectManager.GetInsightsAsync(ct);
         var sb = new StringBuilder();
@@ -274,7 +291,17 @@ public sealed class TeamsChannelService : ITeamsChannelService
         sb.AppendLine();
         sb.AppendLine($"Dashboard: {TabUrl("/projects?view=insights")}");
         sb.AppendLine($"Weekly report: type `report` · DOCX: {TabUrl("/projects?view=insights")}");
-        return sb.ToString();
+        var dash = TabUrl("/projects?view=insights");
+        var health = await _planner.GetHealthSummaryAsync(ct);
+        return Reply(
+            sb.ToString(),
+            TeamsAdaptiveCardBuilder.HealthSummaryCard(
+                insight.HealthScore,
+                insight.RiskLevel,
+                health.TotalTasks,
+                health.Delayed,
+                health.CompletionPercent,
+                dash));
     }
 
     private async Task<string> FormatStakeholderReportAsync(string userObjectId, CancellationToken ct)
@@ -302,9 +329,10 @@ public sealed class TeamsChannelService : ITeamsChannelService
         return sb.ToString();
     }
 
-    private async Task<string> FormatSprintSummaryAsync(CancellationToken ct)
+    private async Task<TeamsReply> FormatSprintSummaryAsync(CancellationToken ct)
     {
         var health = await _planner.GetHealthSummaryAsync(ct);
+        var insight = await _projectManager.GetInsightsAsync(ct);
         var delayed = await _planner.ListTasksAsync(delayedOnly: true, ct: ct);
         var sb = new StringBuilder();
         sb.AppendLine("**Sprint / plan summary**");
@@ -327,9 +355,18 @@ public sealed class TeamsChannelService : ITeamsChannelService
             }
         }
 
+        var dash = TabUrl("/projects?view=overview");
         sb.AppendLine();
-        sb.AppendLine($"Dashboard: {TabUrl("/projects?view=overview")}");
-        return sb.ToString();
+        sb.AppendLine($"Dashboard: {dash}");
+        return Reply(
+            sb.ToString(),
+            TeamsAdaptiveCardBuilder.HealthSummaryCard(
+                insight.HealthScore,
+                health.RiskLevel,
+                health.TotalTasks,
+                health.Delayed,
+                health.CompletionPercent,
+                dash));
     }
 
     private async Task<string> BuildPlannerSnapshotAsync(CancellationToken ct)

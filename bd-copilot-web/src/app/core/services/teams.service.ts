@@ -1,5 +1,6 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { app } from '@microsoft/teams-js';
+import { AuthService } from './auth.service';
 
 export interface CopilotUser {
   objectId: string;
@@ -15,12 +16,11 @@ const DEMO_USER: CopilotUser = {
 
 /**
  * Wraps @microsoft/teams-js so the rest of the app only ever depends on a plain CopilotUser
- * signal. When the app isn't hosted inside a Teams iframe (e.g. `ng serve` during local
- * development) it falls back to a demo identity instead of hanging on the Teams handshake —
- * every API call in this scaffold takes a userObjectId, and this is what supplies it.
+ * signal. Outside Teams, prefers Entra oid from AuthService when signed in.
  */
 @Injectable({ providedIn: 'root' })
 export class TeamsService {
+  private readonly auth = inject(AuthService);
   readonly user = signal<CopilotUser>(DEMO_USER);
   readonly ready = signal(false);
 
@@ -28,7 +28,7 @@ export class TeamsService {
     const isEmbedded = window.self !== window.top;
 
     if (!isEmbedded) {
-      // Not inside a Teams (or Teams-like) host frame — nothing to hand-shake with.
+      this.applyAuthIdentity();
       this.ready.set(true);
       return;
     }
@@ -45,12 +45,25 @@ export class TeamsService {
 
       app.notifySuccess();
     } catch (err) {
-      // Handshake failed (e.g. loaded in a plain iframe that isn't actually Teams) — degrade
-      // to the demo identity rather than blocking the whole app on a Teams host that will
-      // never respond.
       console.warn('Teams SDK initialization failed, falling back to demo identity.', err);
+      this.applyAuthIdentity();
     } finally {
       this.ready.set(true);
+    }
+  }
+
+  /** Call after login so RAG requests use Entra oid instead of the demo user. */
+  applyAuthIdentity(): void {
+    if (this.user().runningInTeams) return;
+    const oid = this.auth.objectId();
+    if (oid) {
+      this.user.set({
+        objectId: oid,
+        displayName: this.auth.displayName() ?? 'Entra User',
+        runningInTeams: false
+      });
+    } else {
+      this.user.set(DEMO_USER);
     }
   }
 }

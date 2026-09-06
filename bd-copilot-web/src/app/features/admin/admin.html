@@ -1,99 +1,186 @@
-<div class="panel-head">
-  <div>
-    <h2>Admin</h2>
-    <p>Sync health, token costs, access audits, and operational smoke tests for Phase 4.
-      @if (authService.isLoggedIn()) {
-        Signed in as {{ authService.displayName() }}.
-      }
-    </p>
-  </div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;">
-    <fluent-button [attr.disabled]="reindexBusy() ? true : null" (click)="reindex()">
-      {{ reindexBusy() ? 'Reindexing…' : 'Reindex' }}
-    </fluent-button>
-    <fluent-button appearance="accent" [attr.disabled]="evalBusy() ? true : null" (click)="runGoldenEval()">
-      {{ evalBusy() ? 'Running eval…' : 'Run golden eval' }}
-    </fluent-button>
-    <fluent-button (click)="logout()">Sign out</fluent-button>
-  </div>
-</div>
+<div class="admin-console">
+  <header class="admin-console__head">
+    <div>
+      <p class="admin-console__eyebrow">Operations</p>
+      <h2>Admin Console</h2>
+      <p>Sync health, Application Insights telemetry, token costs, access audits, and quality evals.
+        Signed in as <strong>{{ authService.displayName() }}</strong>.</p>
+    </div>
+    <div class="admin-console__actions">
+      <a routerLink="/dashboard"><fluent-button appearance="outline">Dashboard</fluent-button></a>
+      <fluent-button [attr.disabled]="reindexBusy() ? true : null" (click)="reindex()">
+        {{ reindexBusy() ? 'Reindexing…' : 'Reindex corpus' }}
+      </fluent-button>
+      <fluent-button appearance="accent" [attr.disabled]="evalBusy() ? true : null" (click)="runGoldenEval()">
+        {{ evalBusy() ? 'Running eval…' : 'Golden eval' }}
+      </fluent-button>
+      <fluent-button (click)="logout()">Sign out</fluent-button>
+    </div>
+  </header>
 
-@if (errorMessage()) {
-  <div class="error-banner">{{ errorMessage() }}</div>
-}
+  @if (errorMessage()) {
+    <div class="error-banner">{{ errorMessage() }}</div>
+  }
 
-@if (loading()) {
-  <p style="color: var(--ink-muted); font-size: 13.5px;">Loading…</p>
-} @else {
-  @if (syncHealth(); as health) {
-    <div class="sync-health-banner" [class.unhealthy]="!health.isHealthy">
-      <div class="sync-health-main">
-        <strong>{{ health.statusMessage }}</strong>
-        @if (health.lastSuccessAt) {
-          <span class="sync-meta">Last success: {{ health.lastSuccessAt | date: 'medium' }}</span>
+  @if (loading()) {
+    <p class="dash__muted">Loading admin console…</p>
+  } @else {
+    @if (cutover(); as c) {
+      <section class="admin-console__cutover" [class.is-ready]="c.readyForProduction">
+        <div class="admin-console__cutover-head">
+          <h3>Tenant cutover</h3>
+          <span class="admin-console__cutover-badge">
+            {{ c.completedCount }}/{{ c.totalCount }}
+            {{ c.readyForProduction ? '· Ready' : '· In progress' }}
+          </span>
+        </div>
+        @if (c.keyVaultUri) {
+          <p class="dash__muted">Key Vault: <code class="mono">{{ c.keyVaultUri }}</code></p>
         }
-        <span class="sync-meta">{{ health.documentsIndexed }} documents · {{ health.sitesConfigured }} sites</span>
+        <ul class="dash-checklist admin-console__cutover-list">
+          @for (item of c.items; track item.id) {
+            <li [class.is-ok]="item.complete">
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.detail }}</span>
+              @if (item.action) {
+                <code class="mono admin-console__cutover-action">{{ item.action }}</code>
+              }
+            </li>
+          }
+        </ul>
+        <p class="dash__muted">{{ c.aclVerificationGuidance }}</p>
+        <p class="dash__muted">
+          Workbook: <code class="mono">{{ c.workbookImportPath }}</code> ·
+          run <code class="mono">{{ c.workbookImportScript }}</code>
+        </p>
+      </section>
+    }
+
+    @if (telemetry(); as t) {
+      <section class="admin-console__telemetry">
+        <h3>Telemetry &amp; cost (24h)</h3>
+        <div class="dash__kpis">
+          <article class="dash-kpi">
+            <span class="dash-kpi__label">Tokens</span>
+            <strong>{{ t.tokensLast24Hours | number }}</strong>
+          </article>
+          <article class="dash-kpi">
+            <span class="dash-kpi__label">Requests</span>
+            <strong>{{ t.requestsLast24Hours | number }}</strong>
+          </article>
+          <article class="dash-kpi">
+            <span class="dash-kpi__label">Avg latency</span>
+            <strong>{{ t.avgLatencyMsLast24Hours | number:'1.0-0' }} ms</strong>
+          </article>
+          <article class="dash-kpi">
+            <span class="dash-kpi__label">P95 latency</span>
+            <strong>{{ t.p95LatencyMsLast24Hours | number:'1.0-0' }} ms</strong>
+          </article>
+          <article class="dash-kpi">
+            <span class="dash-kpi__label">Denials (1h)</span>
+            <strong>{{ t.accessDenialsLastHour | number }}</strong>
+          </article>
+          <article class="dash-kpi">
+            <span class="dash-kpi__label">App Insights</span>
+            <strong>{{ t.applicationInsightsConfigured ? 'On' : 'Off' }}</strong>
+          </article>
+        </div>
+        <p class="dash__muted">{{ t.guidance }}</p>
+        @if (t.appInsightsKustoHint) {
+          <details class="admin-console__kusto">
+            <summary>Azure Monitor Kusto (cost &amp; latency)</summary>
+            <pre class="eval-output">{{ t.appInsightsKustoHint }}</pre>
+          </details>
+        }
+        @if (t.plannerLive; as pl) {
+          <div class="admin-console__planner" [class.is-live]="pl.isLiveConfigured">
+            <strong>Planner:</strong>
+            {{ pl.isLiveConfigured ? 'Live Graph sync configured' : 'Demo / not live' }}
+            · groups {{ pl.groupIdCount }} · plans {{ pl.planIdCount }}
+            <p class="dash__muted">{{ pl.guidance }}</p>
+          </div>
+        }
+      </section>
+    }
+
+    @if (syncHealth(); as health) {
+      <div class="sync-health-banner" [class.unhealthy]="!health.isHealthy">
+        <div class="sync-health-main">
+          <strong>{{ health.statusMessage }}</strong>
+          @if (health.lastSuccessAt) {
+            <span class="sync-meta">Last success: {{ health.lastSuccessAt | date: 'medium' }}</span>
+          }
+          <span class="sync-meta">{{ health.documentsIndexed }} documents · {{ health.sitesConfigured }} sites</span>
+        </div>
+        @if (health.lastError) {
+          <div class="sync-error">{{ health.lastError }}</div>
+        }
       </div>
-      @if (health.lastError) {
-        <div class="sync-error">{{ health.lastError }}</div>
-      }
-    </div>
-  }
+    }
 
-  <h3 style="margin: 20px 0 10px; font-size: 15px;">Token costs by team</h3>
-  @if (tokenCosts().length === 0) {
-    <p style="color: var(--ink-muted); font-size: 13.5px;">No token usage recorded yet.</p>
-  } @else {
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr><th>Team</th><th>Initiative</th><th>Total tokens</th><th>Requests</th></tr>
-        </thead>
-        <tbody>
-          @for (row of tokenCosts(); track (row.teamId ?? '') + (row.initiative ?? '')) {
-            <tr>
-              <td>{{ row.teamId ?? '—' }}</td>
-              <td>{{ row.initiative ?? '—' }}</td>
-              <td>{{ row.totalTokens | number }}</td>
-              <td>{{ row.requestCount | number }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  }
+    <div class="admin-console__grid">
+      <section>
+        <h3>Token costs by team</h3>
+        @if (tokenCosts().length === 0) {
+          <p class="dash__muted">No token usage recorded yet.</p>
+        } @else {
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Team</th><th>Initiative</th><th>Total tokens</th><th>Requests</th></tr>
+              </thead>
+              <tbody>
+                @for (row of tokenCosts(); track (row.teamId ?? '') + (row.initiative ?? '')) {
+                  <tr>
+                    <td>{{ row.teamId ?? '—' }}</td>
+                    <td>{{ row.initiative ?? '—' }}</td>
+                    <td>{{ row.totalTokens | number }}</td>
+                    <td>{{ row.requestCount | number }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
 
-  <h3 style="margin: 20px 0 10px; font-size: 15px;">Recent access audits</h3>
-  @if (accessAudits().length === 0) {
-    <p style="color: var(--ink-muted); font-size: 13.5px;">No access audit entries yet.</p>
-  } @else {
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr><th>When</th><th>User</th><th>Document</th><th>Allowed</th><th>Reason</th></tr>
-        </thead>
-        <tbody>
-          @for (audit of accessAudits(); track audit.id) {
-            <tr>
-              <td>{{ audit.createdAt | date: 'short' }}</td>
-              <td><code class="mono">{{ audit.userObjectId }}</code></td>
-              <td><code class="mono">{{ audit.documentId }}</code></td>
-              <td>
-                <fluent-badge [attr.appearance]="audit.allowed ? 'filled' : 'outline'"
-                              [attr.color]="audit.allowed ? 'success' : 'danger'">
-                  {{ audit.allowed ? 'Yes' : 'No' }}
-                </fluent-badge>
-              </td>
-              <td>{{ audit.reason }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <section>
+        <h3>Recent access audits</h3>
+        @if (accessAudits().length === 0) {
+          <p class="dash__muted">No access audit entries yet.</p>
+        } @else {
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>When</th><th>User</th><th>Document</th><th>Allowed</th><th>Reason</th></tr>
+              </thead>
+              <tbody>
+                @for (audit of accessAudits(); track audit.id) {
+                  <tr>
+                    <td>{{ audit.createdAt | date: 'short' }}</td>
+                    <td><code class="mono">{{ audit.userObjectId }}</code></td>
+                    <td><code class="mono">{{ audit.documentId }}</code></td>
+                    <td>
+                      <fluent-badge [attr.appearance]="audit.allowed ? 'filled' : 'outline'"
+                                    [attr.color]="audit.allowed ? 'success' : 'danger'">
+                        {{ audit.allowed ? 'Yes' : 'No' }}
+                      </fluent-badge>
+                    </td>
+                    <td>{{ audit.reason }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
     </div>
-  }
 
-  @if (goldenEvalResult()) {
-    <h3 style="margin: 20px 0 10px; font-size: 15px;">Golden eval result</h3>
-    <pre class="eval-output">{{ goldenEvalResult() }}</pre>
+    @if (goldenEvalResult()) {
+      <section>
+        <h3>Golden eval result</h3>
+        <pre class="eval-output">{{ goldenEvalResult() }}</pre>
+      </section>
+    }
   }
-}
+</div>

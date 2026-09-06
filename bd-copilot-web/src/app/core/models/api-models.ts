@@ -342,6 +342,104 @@ export interface UnifiedIntelligenceResponse {
   generatedAt: string;
 }
 
+export interface DashboardAiProvider {
+  provider: string;
+  chatModel: string;
+  embeddingModel: string;
+}
+
+export interface ProductionPosture {
+  entraConfigured: boolean;
+  enforceAcl: boolean;
+  requireAuthOnApi: boolean;
+  graphConfigured: boolean;
+  plannerLiveConfigured: boolean;
+  applicationInsightsConfigured: boolean;
+  teamsBotEnabled: boolean;
+  aiProvider: string;
+}
+
+export interface DashboardQuickLink {
+  label: string;
+  path: string;
+  description: string;
+}
+
+export interface DashboardSummary {
+  syncHealth?: SyncHealthStatus | null;
+  plannerHealth?: PlannerHealthSummary | null;
+  projectInsights?: ProjectManagerInsight | null;
+  documentsIndexed: number;
+  accessDenialsLast24Hours: number;
+  tokensLast24Hours: number;
+  requestsLast24Hours: number;
+  aiProvider: DashboardAiProvider;
+  productionPosture: ProductionPosture;
+  quickLinks: DashboardQuickLink[];
+  generatedAt: string;
+}
+
+export interface AdminTelemetrySummary {
+  applicationInsightsConfigured: boolean;
+  accessDenialsLastHour: number;
+  accessDenialsLast24Hours: number;
+  tokensLast24Hours: number;
+  requestsLast24Hours: number;
+  avgLatencyMsLast24Hours: number;
+  p95LatencyMsLast24Hours: number;
+  topTokenConsumers: TeamTokenCostRow[];
+  syncHealth?: SyncHealthStatus | null;
+  plannerLive?: PlannerLiveStatus | null;
+  guidance: string;
+  appInsightsKustoHint?: string;
+}
+
+export interface PlannerLiveStatus {
+  enabled: boolean;
+  seedDemoData: boolean;
+  graphConfigured: boolean;
+  groupIdCount: number;
+  planIdCount: number;
+  isLiveConfigured: boolean;
+  guidance: string;
+}
+
+export interface TenantCutoverItem {
+  id: string;
+  label: string;
+  complete: boolean;
+  status: string;
+  detail: string;
+  action?: string | null;
+}
+
+export interface TenantCutoverStatus {
+  readyForProduction: boolean;
+  completedCount: number;
+  totalCount: number;
+  keyVaultConfigured: boolean;
+  keyVaultUri?: string | null;
+  workbookImportPath: string;
+  workbookImportScript: string;
+  items: TenantCutoverItem[];
+  plannerLive?: PlannerLiveStatus | null;
+  accessDenialsLast24Hours: number;
+  accessAuditsLast24Hours: number;
+  aclVerificationGuidance: string;
+}
+
+export interface AuthConfig {
+  entraEnabled: boolean;
+  tenantId?: string | null;
+  clientId?: string | null;
+  apiClientId?: string | null;
+  apiScope?: string | null;
+  authority?: string | null;
+  enforceAcl: boolean;
+  requireAuthOnApi: boolean;
+  allowPilotAdminLogin?: boolean;
+}
+
 export interface AiProviderStatus {
   provider: string;
   chatModel: string;

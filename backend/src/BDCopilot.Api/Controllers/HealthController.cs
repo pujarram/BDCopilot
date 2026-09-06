@@ -1,10 +1,12 @@
 using BDCopilot.Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BDCopilot.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[AllowAnonymous]
 public class HealthController : ControllerBase
 {
     private readonly BdCopilotDbContext _db;

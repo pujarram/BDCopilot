@@ -34,7 +34,8 @@ public class SearchController : ControllerBase
         [FromQuery] string? corpusSource = null,
         CancellationToken ct = default)
     {
-        var results = await _search.SearchAsync(q, userObjectId, topK, corpusSource, ct);
+        var oid = UserIdentity.ResolveObjectId(User, userObjectId);
+        var results = await _search.SearchAsync(q, oid, topK, corpusSource, ct);
         return Ok(results);
     }
 
@@ -49,6 +50,12 @@ public class SearchController : ControllerBase
     {
         try
         {
+            var oid = UserIdentity.ResolveObjectId(User, request.UserObjectId);
+            if (!string.IsNullOrWhiteSpace(oid))
+            {
+                request.UserObjectId = oid;
+            }
+
             return Ok(await _chat.SearchAndAnswerAsync(request, ct));
         }
         catch (InvalidOperationException ex)

@@ -45,7 +45,7 @@ TestResults/
 coverage/
 *.coverage
 *.coveragexml
-backend/_build_verify*/
+backend/_build_*/
 backend/**/publish/
 backend/**/*.nupkg
 

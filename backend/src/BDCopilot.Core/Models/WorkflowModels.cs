@@ -78,6 +78,8 @@ public class TokenUsageRecord
     public int PromptTokens { get; set; }
     public int CompletionTokens { get; set; }
     public int TotalTokens { get; set; }
+    /// <summary>Wall-clock duration of the AI call in milliseconds (cost &amp; latency dashboards).</summary>
+    public int DurationMs { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 

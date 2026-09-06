@@ -119,6 +119,7 @@ public class BdCopilotDbContext : DbContext
             e.Property(t => t.PromptTokens).HasColumnName("prompt_tokens");
             e.Property(t => t.CompletionTokens).HasColumnName("completion_tokens");
             e.Property(t => t.TotalTokens).HasColumnName("total_tokens");
+            e.Property(t => t.DurationMs).HasColumnName("duration_ms");
             e.Property(t => t.CreatedAt).HasColumnName("created_at");
         });
 

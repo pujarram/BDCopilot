@@ -32,4 +32,7 @@ public class TeamsConversationAccount
 public class TeamsReply
 {
     public required string Text { get; set; }
+
+    /// <summary>Optional Adaptive Card JSON object (application/vnd.microsoft.card.adaptive).</summary>
+    public object? AdaptiveCard { get; set; }
 }

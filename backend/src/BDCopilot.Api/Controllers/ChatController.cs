@@ -28,6 +28,12 @@ public class ChatController : ControllerBase
     {
         try
         {
+            var oid = UserIdentity.ResolveObjectId(User, request.UserObjectId);
+            if (!string.IsNullOrWhiteSpace(oid))
+            {
+                request.UserObjectId = oid;
+            }
+
             var response = await _chatService.AskAsync(request, ct);
             return Ok(response);
         }

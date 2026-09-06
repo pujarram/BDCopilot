@@ -1,102 +1,113 @@
-<div class="tieto-app">
-  <header class="tieto-header">
-    <div class="tieto-header__inner">
-      <a class="tieto-header__logo" routerLink="/chat" aria-label="Tieto — BD Copilot">
-        <img src="/brand/tieto-logo-white.svg" alt="Tieto" width="110" height="38" />
-      </a>
-      <div class="tieto-header__product">
-        <span class="tieto-header__product-name">BD Copilot</span>
-        <span class="tieto-header__product-tag">for Microsoft Teams</span>
-      </div>
-
-      <nav class="tieto-header__view-switch" aria-label="Views">
-        <a routerLink="/chat" [class.active]="isPrototypeRoute()">Prototype</a>
-        <a routerLink="/architecture" routerLinkActive="active">Architecture</a>
-        <a routerLink="/stack" routerLinkActive="active">Tech Stack</a>
-        <a routerLink="/roadmap" routerLinkActive="active">Roadmap</a>
-      </nav>
-
-      <nav class="tieto-header__actions" aria-label="Global">
-        <div class="tieto-header__env">
-          <span class="tieto-header__env-dot" aria-hidden="true"></span>
-          {{ user().runningInTeams ? user().displayName : 'Outside Teams · demo identity' }}
+@if (!isLoginRoute()) {
+  <div class="tieto-app">
+    <header class="tieto-header">
+      <div class="tieto-header__inner">
+        <a class="tieto-header__logo" routerLink="/dashboard" aria-label="Tieto — BD Copilot">
+          <img src="/brand/tieto-logo-white.svg" alt="Tieto" width="110" height="38" />
+        </a>
+        <div class="tieto-header__product">
+          <span class="tieto-header__product-name">BD Copilot</span>
+          <span class="tieto-header__product-tag">Enterprise workspace</span>
         </div>
-        <a class="tieto-header__link" href="https://www.tieto.com/en/contact-us/" target="_blank" rel="noopener">Contact us</a>
-        <button
-          type="button"
-          class="tieto-header__menu-btn"
-          [attr.aria-expanded]="menuOpen()"
-          aria-controls="app-nav"
-          (click)="toggleMenu()"
-        >
-          <tieto-icon [name]="menuOpen() ? 'close' : 'menu'" />
-          <span class="tieto-header__menu-label">{{ menuOpen() ? 'Close' : 'Menu' }}</span>
-        </button>
-      </nav>
+
+        <nav class="tieto-header__view-switch" aria-label="Views">
+          <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+          <a routerLink="/architecture" routerLinkActive="active">Architecture</a>
+          <a routerLink="/stack" routerLinkActive="active">Tech Stack</a>
+          <a routerLink="/roadmap" routerLinkActive="active">Roadmap</a>
+        </nav>
+
+        <nav class="tieto-header__actions" aria-label="Global">
+          <div class="tieto-header__user">
+            <span class="tieto-header__user-avatar" aria-hidden="true">
+              <tieto-icon name="advisor" />
+            </span>
+            <div class="tieto-header__user-meta">
+              <strong>{{ authService.displayName() ?? 'User' }}</strong>
+              <span>{{ authService.role() ?? 'Admin' }}</span>
+            </div>
+            <button type="button" class="tieto-header__signout" (click)="signOut()">
+              Sign out
+            </button>
+          </div>
+          <button
+            type="button"
+            class="tieto-header__menu-btn"
+            [attr.aria-expanded]="menuOpen()"
+            aria-controls="app-nav"
+            (click)="toggleMenu()"
+          >
+            <tieto-icon [name]="menuOpen() ? 'close' : 'menu'" />
+            <span class="tieto-header__menu-label">{{ menuOpen() ? 'Close' : 'Menu' }}</span>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <div class="tieto-body">
+      @if (menuOpen()) {
+        <button type="button" class="tieto-overlay" aria-label="Close menu" (click)="closeMenu()"></button>
+      }
+
+      <main class="tieto-main">
+        <div class="tieto-page-bar">
+          <div>
+            <div class="tieto-page-bar__title">BD Copilot — Business Development</div>
+            <div class="tieto-page-bar__sub">Grounded AI · SharePoint corpus · Project Intelligence</div>
+          </div>
+          <div class="tieto-page-bar__chips">
+            <span class="tieto-chip">RAG</span>
+            <span class="tieto-chip tieto-chip--success">ACL-aware</span>
+            <span class="tieto-chip">Teams</span>
+          </div>
+        </div>
+        <section class="tieto-content">
+          <router-outlet />
+        </section>
+      </main>
     </div>
-  </header>
 
-  <div class="tieto-body">
-    @if (menuOpen()) {
-      <button type="button" class="tieto-overlay" aria-label="Close menu" (click)="closeMenu()"></button>
-    }
+    <footer class="tieto-footer">
+      <div class="tieto-footer__bar">
+        <div class="tieto-footer__inner">
+          <nav class="tieto-footer__legal" aria-label="Legal">
+            <ul>
+              <li>
+                <a href="https://www.tieto.com/en/privacy/" target="_blank" rel="noopener noreferrer">Privacy notice</a>
+              </li>
+              <li>
+                <a href="https://www.tieto.com/en/privacy/legal-notice/" target="_blank" rel="noopener noreferrer">Legal notice</a>
+              </li>
+              <li>
+                <a href="https://www.tieto.com/en/privacy/cookie-notice/" target="_blank" rel="noopener noreferrer">Cookie notice</a>
+              </li>
+            </ul>
+          </nav>
 
-    <main class="tieto-main">
-      <div class="tieto-page-bar">
-        <div>
-          <div class="tieto-page-bar__title">BD Copilot — Business Development</div>
-          <div class="tieto-page-bar__sub">Tieto · Microsoft Teams · Grounded answers with citations</div>
-        </div>
-        <div class="tieto-page-bar__chips">
-          <span class="tieto-chip">RAG</span>
-          <span class="tieto-chip tieto-chip--success">ACL-aware</span>
-          <span class="tieto-chip">SharePoint</span>
+          <div class="tieto-footer__copy">
+            <span class="tieto-footer__copy-year">©2026</span>
+            <span>Tieto</span>
+          </div>
+
+          <nav class="tieto-footer__social" aria-label="Social">
+            <ul>
+              <li>
+                <a href="https://www.linkedin.com/company/tieto/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+              </li>
+              <li>
+                <a href="https://www.instagram.com/tietoglobal/" target="_blank" rel="noopener noreferrer">Instagram</a>
+              </li>
+              <li>
+                <a href="https://www.youtube.com/@TietoGlobal" target="_blank" rel="noopener noreferrer">YouTube</a>
+              </li>
+            </ul>
+          </nav>
         </div>
       </div>
-      <section class="tieto-content">
-        <router-outlet />
-      </section>
-    </main>
+    </footer>
   </div>
-
-  <footer class="tieto-footer">
-    <div class="tieto-footer__bar">
-      <div class="tieto-footer__inner">
-        <nav class="tieto-footer__legal" aria-label="Legal">
-          <ul>
-            <li>
-              <a href="https://www.tieto.com/en/privacy/" target="_blank" rel="noopener noreferrer">Privacy notice</a>
-            </li>
-            <li>
-              <a href="https://www.tieto.com/en/privacy/legal-notice/" target="_blank" rel="noopener noreferrer">Legal notice</a>
-            </li>
-            <li>
-              <a href="https://www.tieto.com/en/privacy/cookie-notice/" target="_blank" rel="noopener noreferrer">Cookie notice</a>
-            </li>
-          </ul>
-        </nav>
-
-        <div class="tieto-footer__copy">
-          <span class="tieto-footer__copy-year">©2026</span>
-          <span>Tieto</span>
-        </div>
-
-        <nav class="tieto-footer__social" aria-label="Social">
-          <ul>
-            <li>
-              <a href="https://www.linkedin.com/company/tieto/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
-            </li>
-            <li>
-              <a href="https://www.instagram.com/tietoglobal/" target="_blank" rel="noopener noreferrer">Instagram</a>
-            </li>
-            <li>
-              <a href="https://www.youtube.com/@TietoGlobal" target="_blank" rel="noopener noreferrer">YouTube</a>
-            </li>
-          </ul>
-        </nav>
-      </div>
-    </div>
-  </footer>
-</div>
+} @else {
+  <router-outlet />
+}
 
 <app-toast />

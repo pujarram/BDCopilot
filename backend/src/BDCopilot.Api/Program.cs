@@ -18,6 +18,16 @@ using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Key Vault (production): set KEYVAULT_URI or KeyVault:Uri — uses DefaultAzureCredential (Managed Identity on App Service).
+var keyVaultUri = builder.Configuration["KeyVault:Uri"]
+    ?? Environment.GetEnvironmentVariable("KEYVAULT_URI");
+if (!string.IsNullOrWhiteSpace(keyVaultUri))
+{
+    builder.Configuration.AddAzureKeyVault(
+        new Uri(keyVaultUri),
+        new Azure.Identity.DefaultAzureCredential());
+}
+
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
@@ -69,11 +79,13 @@ if (entraConfigured)
         .AddJwtBearer(options =>
         {
             options.Authority = authority;
+            options.MapInboundClaims = false;
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateAudience = !string.IsNullOrWhiteSpace(azureAd.Audience) || !string.IsNullOrWhiteSpace(azureAd.ClientId),
                 ValidAudience = string.IsNullOrWhiteSpace(azureAd.Audience) ? azureAd.ClientId : azureAd.Audience,
-                RoleClaimType = "roles"
+                RoleClaimType = "roles",
+                NameClaimType = "preferred_username"
             };
         });
 
@@ -212,8 +224,17 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.UseHttpsRedirection();
+// CORS before HTTPS redirect so cross-origin calls from Angular (localhost:4200) are not
+// broken by a 307 to HTTPS that lacks Access-Control-Allow-Origin.
 app.UseCors(AngularDevCorsPolicy);
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
+app.UseMiddleware<BDCopilot.Api.Middleware.RequestLatencyMiddleware>();
+
 if (entraConfigured)
 {
     app.UseAuthentication();
@@ -309,6 +330,8 @@ using (var scope = app.Services.CreateScope())
                 captured_at         timestamptz NOT NULL DEFAULT now()
             );
             CREATE UNIQUE INDEX IF NOT EXISTS ix_planner_task_snapshots_date ON planner_task_snapshots (snapshot_date);
+
+            ALTER TABLE IF EXISTS token_usage ADD COLUMN IF NOT EXISTS duration_ms int NOT NULL DEFAULT 0;
             """;
         await cmd.ExecuteNonQueryAsync();
     }

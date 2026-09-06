@@ -1,8 +1,12 @@
+using BDCopilot.Api.Filters;
 using BDCopilot.Core.Interfaces;
 using BDCopilot.Core.Models;
 using BDCopilot.Infrastructure.Data;
+using BDCopilot.Infrastructure.Graph;
+using BDCopilot.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace BDCopilot.Api.Controllers;
 
@@ -10,30 +14,44 @@ namespace BDCopilot.Api.Controllers;
 [ApiController]
 [Route("api/admin")]
 [Produces("application/json")]
+[AdminAuthorize]
 public class AdminController : ControllerBase
 {
     private readonly IDocumentSyncService _sync;
     private readonly IAccessAuditService _audits;
     private readonly BdCopilotDbContext _db;
+    private readonly IConfiguration _config;
+    private readonly GraphClientFactory _graph;
+    private readonly PlannerSyncSettings _planner;
+    private readonly AzureAdSettings _azureAd;
 
-    public AdminController(IDocumentSyncService sync, IAccessAuditService audits, BdCopilotDbContext db)
+    public AdminController(
+        IDocumentSyncService sync,
+        IAccessAuditService audits,
+        BdCopilotDbContext db,
+        IConfiguration config,
+        GraphClientFactory graph,
+        IOptions<PlannerSyncSettings> planner,
+        IOptions<AzureAdSettings> azureAd)
     {
         _sync = sync;
         _audits = audits;
         _db = db;
+        _config = config;
+        _graph = graph;
+        _planner = planner.Value;
+        _azureAd = azureAd.Value;
     }
 
     [HttpPost("reindex")]
     public async Task<ActionResult<SyncHealthStatus>> Reindex([FromBody] ReindexRequest? request, CancellationToken ct)
     {
-        // Full sync covers multi-site delta; optional site filter is applied via SyncSiteState.IsEnabled.
         if (!string.IsNullOrWhiteSpace(request?.SiteId))
         {
             var sites = await _db.SyncSiteStates.ToListAsync(ct);
             foreach (var site in sites)
             {
                 site.IsEnabled = string.Equals(site.SiteId, request.SiteId, StringComparison.OrdinalIgnoreCase);
-                // Force a full re-walk by clearing delta on the target site.
                 if (site.IsEnabled) site.DeltaLink = null;
             }
             await _db.SaveChangesAsync(ct);
@@ -64,6 +82,206 @@ public class AdminController : ControllerBase
 
         return Ok(rows);
     }
+
+    [HttpGet("planner-status")]
+    public ActionResult<PlannerLiveStatus> PlannerStatus()
+    {
+        var groupCount = _planner.GroupIds.Count(id => !string.IsNullOrWhiteSpace(id));
+        var planCount = _planner.PlanIds.Count(id => !string.IsNullOrWhiteSpace(id));
+        var live = _graph.IsConfigured && (groupCount > 0 || planCount > 0) && !_planner.SeedDemoData;
+
+        return Ok(new PlannerLiveStatus
+        {
+            Enabled = _planner.Enabled,
+            SeedDemoData = _planner.SeedDemoData,
+            GraphConfigured = _graph.IsConfigured,
+            GroupIdCount = groupCount,
+            PlanIdCount = planCount,
+            IsLiveConfigured = live,
+            Guidance = live
+                ? "Live Graph Planner sync is configured. Hangfire refreshes plans every 15 minutes."
+                : "Grant app permissions Tasks.Read.All + Group.Read.All (admin consent), set Graph credentials, " +
+                  "set Planner:GroupIds and/or Planner:PlanIds, and set Planner:SeedDemoData=false."
+        });
+    }
+
+    [HttpGet("telemetry")]
+    public async Task<ActionResult<AdminTelemetrySummary>> Telemetry(CancellationToken ct)
+    {
+        var since1h = DateTimeOffset.UtcNow.AddHours(-1);
+        var since24h = DateTimeOffset.UtcNow.AddHours(-24);
+        var appInsights = !string.IsNullOrWhiteSpace(_config["ApplicationInsights:ConnectionString"]);
+
+        var top = await _db.TokenUsageRecords
+            .GroupBy(t => new { t.TeamId, t.Initiative })
+            .Select(g => new TeamTokenCostRow
+            {
+                TeamId = g.Key.TeamId,
+                Initiative = g.Key.Initiative,
+                TotalTokens = g.Sum(x => (long)x.TotalTokens),
+                RequestCount = g.Count()
+            })
+            .OrderByDescending(r => r.TotalTokens)
+            .Take(10)
+            .ToListAsync(ct);
+
+        var tokens24 = await _db.TokenUsageRecords
+            .Where(t => t.CreatedAt >= since24h)
+            .ToListAsync(ct);
+
+        var latencies = tokens24.Where(t => t.DurationMs > 0).Select(t => (double)t.DurationMs).OrderBy(x => x).ToList();
+        double avgLatency = latencies.Count == 0 ? 0 : latencies.Average();
+        double p95 = 0;
+        if (latencies.Count > 0)
+        {
+            var idx = (int)Math.Clamp(Math.Ceiling(latencies.Count * 0.95) - 1, 0, latencies.Count - 1);
+            p95 = latencies[idx];
+        }
+
+        var plannerStatus = PlannerStatus().Value!;
+
+        return Ok(new AdminTelemetrySummary
+        {
+            ApplicationInsightsConfigured = appInsights,
+            AccessDenialsLastHour = await _db.AccessAuditRecords
+                .CountAsync(a => !a.Allowed && a.CreatedAt >= since1h, ct),
+            AccessDenialsLast24Hours = await _db.AccessAuditRecords
+                .CountAsync(a => !a.Allowed && a.CreatedAt >= since24h, ct),
+            TokensLast24Hours = tokens24.Sum(t => (long)t.TotalTokens),
+            RequestsLast24Hours = tokens24.Count,
+            AvgLatencyMsLast24Hours = Math.Round(avgLatency, 1),
+            P95LatencyMsLast24Hours = Math.Round(p95, 1),
+            TopTokenConsumers = top,
+            SyncHealth = await _sync.GetHealthAsync(ct),
+            PlannerLive = plannerStatus,
+            Guidance = appInsights
+                ? "App Insights is on. Use the Kusto hint below for cost & latency workbooks in Azure Monitor."
+                : "Set ApplicationInsights:ConnectionString (App Service / Key Vault) to enable cloud telemetry.",
+            AppInsightsKustoHint =
+                """
+                customEvents
+                | where name == "BdCopilot.TokenUsage"
+                | extend total=todouble(customMeasurements.TotalTokens), ms=todouble(customMeasurements.DurationMs)
+                | summarize tokens=sum(total), avgMs=avg(ms), p95Ms=percentile(ms, 95), requests=count() by bin(timestamp, 1h)
+                | render timechart
+                """
+        });
+    }
+
+    [HttpGet("cutover-status")]
+    public async Task<ActionResult<TenantCutoverStatus>> CutoverStatus(CancellationToken ct)
+    {
+        var since24h = DateTimeOffset.UtcNow.AddHours(-24);
+        var keyVaultUri = _config["KeyVault:Uri"] ?? Environment.GetEnvironmentVariable("KEYVAULT_URI");
+        var keyVaultConfigured = !string.IsNullOrWhiteSpace(keyVaultUri);
+
+        var entraConfigured = !string.IsNullOrWhiteSpace(_azureAd.TenantId)
+                              && !string.IsNullOrWhiteSpace(_azureAd.ClientId);
+        var spaConfigured = !string.IsNullOrWhiteSpace(_azureAd.SpaClientId)
+                            || entraConfigured;
+        var appInsights = !string.IsNullOrWhiteSpace(_config["ApplicationInsights:ConnectionString"]);
+        var postgres = !string.IsNullOrWhiteSpace(_config.GetConnectionString("Postgres"));
+        var plannerStatus = PlannerStatus().Value!;
+
+        var denials24h = await _db.AccessAuditRecords
+            .CountAsync(a => !a.Allowed && a.CreatedAt >= since24h, ct);
+        var audits24h = await _db.AccessAuditRecords
+            .CountAsync(a => a.CreatedAt >= since24h, ct);
+
+        var aclAuditing = _azureAd.EnforceAcl && (_graph.IsConfigured || audits24h > 0);
+
+        var items = new List<TenantCutoverItem>
+        {
+            Item("kv", "Key Vault linked (KEYVAULT_URI / KeyVault:Uri)", keyVaultConfigured,
+                keyVaultConfigured ? "Secrets loaded from Key Vault" : "Set KEYVAULT_URI on App Service; grant Managed Identity Secret Get",
+                "docs/azure/Setup-KeyVaultSecrets.ps1"),
+            Item("graph-secrets", "Graph credentials (TenantId, ClientId, ClientSecret)", _graph.IsConfigured,
+                _graph.IsConfigured ? "Graph app-only client configured" : "Populate Graph-ClientSecret in Key Vault",
+                "docs/azure/Setup-KeyVaultSecrets.ps1"),
+            Item("graph-consent", "Graph admin consent (Tasks.Read.All, Group.Read.All)", _graph.IsConfigured,
+                "Run Grant-GraphPlannerConsent.ps1 after adding app permissions in Entra",
+                "docs/azure/Grant-GraphPlannerConsent.ps1"),
+            Item("planner-ids", "Planner GroupIds / PlanIds (live sync)", plannerStatus.IsLiveConfigured,
+                plannerStatus.Guidance,
+                "docs/PRODUCTION_HARDENING.md#1-live-graph-planner"),
+            Item("entra-api", "Entra API app (TenantId, ClientId, Audience)", entraConfigured,
+                entraConfigured ? "JWT validation enabled" : "Set AzureAd:TenantId and AzureAd:ClientId",
+                "docs/PRODUCTION_HARDENING.md#2-entra-sso-msal--api-jwt"),
+            Item("entra-spa", "Entra SPA client (SpaClientId, redirect URIs)", spaConfigured,
+                spaConfigured ? "MSAL Sign in with Microsoft enabled" : "Set AzureAd:SpaClientId for Angular",
+                "docs/PRODUCTION_HARDENING.md#2-entra-sso-msal--api-jwt"),
+            Item("admin-role", "BdCopilot.Admin role assigned to operators",
+                User.IsInRole("BdCopilot.Admin")
+                || (_azureAd.AllowPilotAdminLogin && !entraConfigured),
+                User.IsInRole("BdCopilot.Admin")
+                    ? "Current caller has BdCopilot.Admin"
+                    : (_azureAd.AllowPilotAdminLogin && !entraConfigured
+                        ? "Pilot mode — assign BdCopilot.Admin before SSO cutover"
+                        : "Assign app role via Assign-BdCopilotAdminRole.ps1"),
+                "docs/azure/Assign-BdCopilotAdminRole.ps1"),
+            Item("appinsights", "Application Insights connection string", appInsights,
+                appInsights ? "Telemetry active" : "Set ApplicationInsights-ConnectionString in Key Vault",
+                "docs/azure/Setup-KeyVaultSecrets.ps1"),
+            Item("postgres", "PostgreSQL connection string", postgres,
+                postgres ? "Database reachable" : "Set ConnectionStrings-Postgres in Key Vault",
+                "docs/azure/Setup-KeyVaultSecrets.ps1"),
+            Item("enforce-acl", "ACL enforcement (EnforceAcl=true)", _azureAd.EnforceAcl && _graph.IsConfigured,
+                _azureAd.EnforceAcl
+                    ? (_graph.IsConfigured ? "Live Graph ACL checks enabled" : "EnforceAcl on but Graph not configured — SharePoint denies")
+                    : "Set AzureAd:EnforceAcl=true after Graph is live",
+                "docs/PRODUCTION_HARDENING.md#4-acl-cutover"),
+            Item("require-auth", "API auth required (RequireAuthOnApi=true)", _azureAd.RequireAuthOnApi && entraConfigured,
+                _azureAd.RequireAuthOnApi ? "All API routes require JWT" : "Enable after SSO cutover",
+                null),
+            Item("pilot-off", "Pilot admin login disabled", !_azureAd.AllowPilotAdminLogin,
+                _azureAd.AllowPilotAdminLogin
+                    ? "AllowPilotAdminLogin still true — disable for production"
+                    : "SSO-only login",
+                null),
+            Item("monitor-wb", "Azure Monitor workbook published", appInsights,
+                "Import docs/azure/BDCopilot-Monitor.workbook.json via Import-MonitorWorkbook.ps1",
+                "docs/azure/Import-MonitorWorkbook.ps1"),
+            Item("acl-audits", "ACL audit trail active (24h)", audits24h > 0 || (_azureAd.EnforceAcl && _graph.IsConfigured),
+                audits24h > 0
+                    ? $"{audits24h} audit entries in 24h ({denials24h} denials) — review Admin Console table below"
+                    : "Run retrieval/chat after EnforceAcl to populate access_audit",
+                null)
+        };
+
+        var completed = items.Count(i => i.Complete);
+        var ready = items.Where(i => i.Id is not "monitor-wb" and not "acl-audits")
+            .All(i => i.Complete);
+
+        return Ok(new TenantCutoverStatus
+        {
+            ReadyForProduction = ready,
+            CompletedCount = completed,
+            TotalCount = items.Count,
+            KeyVaultConfigured = keyVaultConfigured,
+            KeyVaultUri = keyVaultUri,
+            Items = items,
+            PlannerLive = plannerStatus,
+            AccessDenialsLast24Hours = denials24h,
+            AccessAuditsLast24Hours = audits24h,
+            AclVerificationGuidance = denials24h > 0
+                ? $"ACL is logging denials ({denials24h} in 24h). Review Recent access audits — denied rows confirm trimming works."
+                : audits24h > 0
+                    ? "Audits are flowing; no denials in 24h (users may only hit allowed docs, or EnforceAcl is off)."
+                    : "After EnforceAcl cutover, exercise chat/search as a non-owner user and confirm deny rows appear when expected."
+        });
+    }
+
+    private static TenantCutoverItem Item(
+        string id, string label, bool complete, string detail, string? action) =>
+        new()
+        {
+            Id = id,
+            Label = label,
+            Complete = complete,
+            Status = complete ? "complete" : "pending",
+            Detail = detail,
+            Action = action
+        };
 
     [HttpGet("slo")]
     public async Task<IActionResult> Slo(CancellationToken ct)

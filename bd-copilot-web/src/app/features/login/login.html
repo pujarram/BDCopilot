@@ -1,25 +1,77 @@
-<div class="panel-head">
-  <div>
-    <h2>Admin login</h2>
-    <p>Temporary local admin until Entra user management is connected. Default: <code>admin</code> / <code>admin123</code>.</p>
+<div class="auth-page">
+  <div class="auth-page__panel auth-page__brand">
+    <div class="auth-page__logo">
+      <img src="/brand/tieto-logo-white.svg" alt="Tieto" width="120" height="42" />
+    </div>
+    <h1>BD Copilot</h1>
+    <p>Enterprise AI for business development — grounded in SharePoint, delivered in Microsoft Teams.</p>
+    <ul class="auth-page__features">
+      <li>RAG chat with citations</li>
+      <li>RFP · Business case · Proposal generators</li>
+      <li>Project Intelligence &amp; Teams bot</li>
+    </ul>
+    @if (entraEnabled()) {
+      <p class="auth-page__entra-note">Microsoft Entra SSO is configured for this environment.</p>
+    }
   </div>
-</div>
 
-<div class="login-card">
-  <div class="field">
-    <label for="login-user">Username</label>
-    <input id="login-user" type="text" [(ngModel)]="username" autocomplete="username" />
+  <div class="auth-page__panel auth-page__form">
+    <div class="auth-card">
+      <h2>Sign in</h2>
+      <p class="auth-card__sub">
+        @if (entraEnabled()) {
+          Sign in with Microsoft for production access, or use pilot credentials when enabled.
+        } @else {
+          Use your administrator credentials to access the BD Copilot workspace.
+        }
+      </p>
+
+      @if (entraEnabled()) {
+        <fluent-button
+          appearance="accent"
+          class="auth-card__submit"
+          [attr.disabled]="entraBusy() ? true : null"
+          (click)="signInWithMicrosoft()"
+        >
+          {{ entraBusy() ? 'Redirecting to Microsoft…' : 'Sign in with Microsoft' }}
+        </fluent-button>
+      }
+
+      @if (allowPilot()) {
+        @if (entraEnabled()) {
+          <p class="auth-card__divider">or pilot admin</p>
+        }
+
+        <div class="field">
+          <label for="login-user">Username</label>
+          <input id="login-user" type="text" [(ngModel)]="username" autocomplete="username" />
+        </div>
+        <div class="field">
+          <label for="login-pass">Password</label>
+          <input
+            id="login-pass"
+            type="password"
+            [(ngModel)]="password"
+            autocomplete="current-password"
+            (keydown.enter)="submit()"
+          />
+        </div>
+
+        <fluent-button
+          [attr.appearance]="entraEnabled() ? 'outline' : 'accent'"
+          class="auth-card__submit"
+          [attr.disabled]="busy() ? true : null"
+          (click)="submit()"
+        >
+          {{ busy() ? 'Signing in…' : 'Sign in with admin account' }}
+        </fluent-button>
+
+        <p class="auth-card__hint">Pilot default: <code>admin</code> / <code>admin123</code> · Session lasts 12 hours.</p>
+      }
+
+      @if (errorMessage()) {
+        <div class="error-banner auth-card__error">{{ errorMessage() }}</div>
+      }
+    </div>
   </div>
-  <div class="field">
-    <label for="login-pass">Password</label>
-    <input id="login-pass" type="password" [(ngModel)]="password" autocomplete="current-password" (keydown.enter)="submit()" />
-  </div>
-
-  <fluent-button appearance="accent" [attr.disabled]="busy() ? true : null" (click)="submit()">
-    {{ busy() ? 'Signing in…' : 'Sign in' }}
-  </fluent-button>
-
-  @if (errorMessage()) {
-    <div class="error-banner" style="margin-top:14px;">{{ errorMessage() }}</div>
-  }
 </div>

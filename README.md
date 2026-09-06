@@ -2,6 +2,8 @@
 
 An AI business-development copilot: chat, an RFP generator, a business case generator and a proposal generator, all grounded in your team's own SharePoint/Teams documents with citations, and all respecting your existing SharePoint permissions on every query.
 
+**Production cutover:** see [`docs/PRODUCTION_HARDENING.md`](docs/PRODUCTION_HARDENING.md) and [`docs/azure/README.md`](docs/azure/README.md) for Key Vault, Entra, Graph consent, Monitor workbook, and Admin Console cutover checklist.
+
 This is a real, working scaffold — Angular 20 talks to a real .NET Core 10 API, which talks to a real PostgreSQL + pgvector database and a real Ollama (or Azure OpenAI) model. It is **not** a click-through mock: point it at a running database and model endpoint and the RAG loop (question → grounded answer with citation) works end to end. Two integration points are deliberately stubbed rather than faked — see **What's real vs. stubbed** below, and the Architecture and Roadmap pages inside the app itself.
 
 ## Project layout

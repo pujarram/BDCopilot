@@ -1,0 +1,93 @@
+<div class="dash">
+  <header class="dash__hero">
+    <div>
+      <p class="dash__eyebrow">Welcome back</p>
+      <h1>{{ auth.displayName() ?? 'BD Copilot' }}</h1>
+      <p class="dash__sub">Your business development command center — grounded AI, document reuse, and project intelligence.</p>
+    </div>
+    <div class="dash__hero-actions">
+      <a routerLink="/chat"><fluent-button appearance="accent">Start chat</fluent-button></a>
+      <a routerLink="/admin"><fluent-button appearance="outline">Admin console</fluent-button></a>
+    </div>
+  </header>
+
+  @if (loading()) {
+    <p class="dash__muted">Loading dashboard…</p>
+  } @else if (errorMessage()) {
+    <div class="error-banner">{{ errorMessage() }}</div>
+  } @else if (summary(); as s) {
+    <section class="dash__kpis" aria-label="Key metrics">
+      <article class="dash-kpi">
+        <span class="dash-kpi__label">Documents indexed</span>
+        <strong>{{ s.documentsIndexed | number }}</strong>
+        <span class="dash-kpi__hint">{{ s.syncHealth?.statusMessage ?? 'Sync status unknown' }}</span>
+      </article>
+      <article class="dash-kpi">
+        <span class="dash-kpi__label">Project health</span>
+        <strong>{{ s.projectInsights?.healthScore ?? '—' }}/100</strong>
+        <span class="dash-kpi__hint">Risk: {{ s.projectInsights?.riskLevel ?? s.plannerHealth?.riskLevel ?? '—' }}</span>
+      </article>
+      <article class="dash-kpi">
+        <span class="dash-kpi__label">Delayed tasks</span>
+        <strong [class.is-warn]="(s.plannerHealth?.delayed ?? 0) > 0">{{ s.plannerHealth?.delayed ?? 0 }}</strong>
+        <span class="dash-kpi__hint">{{ s.plannerHealth?.completionPercent ?? 0 }}% complete</span>
+      </article>
+      <article class="dash-kpi">
+        <span class="dash-kpi__label">AI usage (24h)</span>
+        <strong>{{ s.tokensLast24Hours | number }}</strong>
+        <span class="dash-kpi__hint">{{ s.requestsLast24Hours }} requests · {{ s.aiProvider.provider }}</span>
+      </article>
+    </section>
+
+    <section class="dash__grid">
+      <article class="dash-card">
+        <h2>Quick actions</h2>
+        <div class="dash-links">
+          @for (link of s.quickLinks; track link.path) {
+            <a class="dash-link" [routerLink]="link.path">
+              <strong>{{ link.label }}</strong>
+              <span>{{ link.description }}</span>
+            </a>
+          }
+        </div>
+      </article>
+
+      <article class="dash-card">
+        <h2>Production posture</h2>
+        <ul class="dash-checklist">
+          <li [class.is-ok]="s.productionPosture.entraConfigured">Entra SSO configured</li>
+          <li [class.is-ok]="s.productionPosture.enforceAcl">ACL enforcement enabled</li>
+          <li [class.is-ok]="s.productionPosture.graphConfigured">Microsoft Graph connected</li>
+          <li [class.is-ok]="s.productionPosture.plannerLiveConfigured">Live Planner sync</li>
+          <li [class.is-ok]="s.productionPosture.applicationInsightsConfigured">Application Insights</li>
+          <li [class.is-ok]="s.productionPosture.teamsBotEnabled">Teams bot enabled</li>
+        </ul>
+        <p class="dash__muted">Provider: <strong>{{ s.productionPosture.aiProvider }}</strong> · {{ s.aiProvider.chatModel }}</p>
+      </article>
+
+      <article class="dash-card dash-card--wide">
+        <h2>Project snapshot</h2>
+        @if (s.plannerHealth) {
+          <p>{{ s.plannerHealth.statusMessage }}</p>
+          <div class="dash-mini-stats">
+            <span>Total {{ s.plannerHealth.totalTasks }}</span>
+            <span>Done {{ s.plannerHealth.completed }}</span>
+            <span>WIP {{ s.plannerHealth.inProgress }}</span>
+            <span>Delayed {{ s.plannerHealth.delayed }}</span>
+          </div>
+        }
+        @if (s.projectInsights?.summary) {
+          <p class="dash-insight">{{ s.projectInsights!.summary }}</p>
+        }
+        <a routerLink="/projects"><fluent-button appearance="outline">Open Project Intelligence</fluent-button></a>
+      </article>
+
+      <article class="dash-card">
+        <h2>Security (24h)</h2>
+        <p><strong>{{ s.accessDenialsLast24Hours }}</strong> access denials logged</p>
+        <p class="dash__muted">Live Graph ACL checks when EnforceAcl is on in production.</p>
+        <a routerLink="/admin"><fluent-button appearance="outline">View audits</fluent-button></a>
+      </article>
+    </section>
+  }
+</div>

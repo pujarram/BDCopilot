@@ -7,8 +7,10 @@ import { ToastService } from '../../core/services/toast.service';
 import { AuthService } from '../../core/services/auth.service';
 import {
   AccessAuditRecord,
+  AdminTelemetrySummary,
   SyncHealthStatus,
-  TeamTokenCostRow
+  TeamTokenCostRow,
+  TenantCutoverStatus
 } from '../../core/models/api-models';
 
 @Component({
@@ -28,6 +30,8 @@ export class Admin implements OnInit {
   protected readonly syncHealth = signal<SyncHealthStatus | null>(null);
   protected readonly tokenCosts = signal<TeamTokenCostRow[]>([]);
   protected readonly accessAudits = signal<AccessAuditRecord[]>([]);
+  protected readonly telemetry = signal<AdminTelemetrySummary | null>(null);
+  protected readonly cutover = signal<TenantCutoverStatus | null>(null);
   protected readonly goldenEvalResult = signal<string | null>(null);
 
   protected readonly loading = signal(true);
@@ -36,10 +40,6 @@ export class Admin implements OnInit {
   protected readonly errorMessage = signal<string | null>(null);
 
   ngOnInit(): void {
-    if (!this.auth.isLoggedIn()) {
-      void this.router.navigateByUrl('/login');
-      return;
-    }
     this.loadAll();
   }
 
@@ -85,7 +85,7 @@ export class Admin implements OnInit {
     this.loading.set(true);
     this.errorMessage.set(null);
 
-    let pending = 3;
+    let pending = 5;
     const done = () => {
       pending -= 1;
       if (pending === 0) this.loading.set(false);
@@ -104,6 +104,16 @@ export class Admin implements OnInit {
     this.api.getAccessAudits(50).subscribe({
       next: rows => { this.accessAudits.set(rows); done(); },
       error: err => { console.error(err); this.errorMessage.set('Could not load admin data — see the browser console.'); done(); }
+    });
+
+    this.api.getAdminTelemetry().subscribe({
+      next: t => { this.telemetry.set(t); done(); },
+      error: err => { console.error(err); done(); }
+    });
+
+    this.api.getCutoverStatus().subscribe({
+      next: c => { this.cutover.set(c); done(); },
+      error: err => { console.error(err); done(); }
     });
   }
 }

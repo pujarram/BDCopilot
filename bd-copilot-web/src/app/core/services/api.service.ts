@@ -35,6 +35,10 @@ import {
   PlannerBurndownPoint,
   RfpStreamEvent,
   AdminLoginResponse,
+  AdminTelemetrySummary,
+  AuthConfig,
+  DashboardSummary,
+  TenantCutoverStatus,
   SearchResultItem,
   SyncHealthStatus,
   TeamTokenCostRow,
@@ -395,6 +399,22 @@ export class ApiService {
 
   adminLogin(username: string, password: string): Observable<AdminLoginResponse> {
     return this.http.post<AdminLoginResponse>(`${this.baseUrl}/auth/login`, { username, password });
+  }
+
+  getAuthConfig(): Observable<AuthConfig> {
+    return this.http.get<AuthConfig>(`${this.baseUrl}/auth/config`);
+  }
+
+  getDashboardSummary(): Observable<DashboardSummary> {
+    return this.http.get<DashboardSummary>(`${this.baseUrl}/dashboard/summary`);
+  }
+
+  getAdminTelemetry(): Observable<AdminTelemetrySummary> {
+    return this.http.get<AdminTelemetrySummary>(`${this.baseUrl}/admin/telemetry`);
+  }
+
+  getCutoverStatus(): Observable<TenantCutoverStatus> {
+    return this.http.get<TenantCutoverStatus>(`${this.baseUrl}/admin/cutover-status`);
   }
 
   getTokenCosts(): Observable<TeamTokenCostRow[]> {
