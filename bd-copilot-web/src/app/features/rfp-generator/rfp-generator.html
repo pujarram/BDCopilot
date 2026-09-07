@@ -15,6 +15,19 @@
   </div>
 }
 
+@if (dynamicsDeals().length) {
+  <div class="reuse-banner" style="margin-bottom:12px;">
+    <strong>Dynamics deal context</strong>
+    <p>Pull CRM deal notes into focus material instead of typing them manually.</p>
+    <div class="pi-fusion-actions">
+      @for (d of dynamicsDeals(); track d.opportunityId) {
+        <fluent-button appearance="outline" (click)="pullDynamics(d.client)">{{ d.client }}</fluent-button>
+      }
+      <fluent-button appearance="accent" (click)="pullDynamics()">Use best match for customer</fluent-button>
+    </div>
+  </div>
+}
+
 <div class="form-grid">
   <div class="field">
     <label for="rfp-title">RFP title</label>
@@ -36,6 +49,14 @@
     <select id="rfp-tone" [value]="tone()" (change)="tone.set($any($event.target).value)">
       <option value="Formal">Formal / enterprise</option>
       <option value="Consultative">Consultative</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="rfp-compliance">Compliance region</label>
+    <select id="rfp-compliance" [value]="complianceRegion()" (change)="complianceRegion.set($any($event.target).value)">
+      <option value="EU">EU / GDPR (en-GB)</option>
+      <option value="US">US (en-US)</option>
+      <option value="FI">Finland (fi-FI)</option>
     </select>
   </div>
   <div class="field field--full">
@@ -136,6 +157,10 @@
         <fluent-button [attr.disabled]="exporting() ? true : null" (click)="exportDocx()">
           {{ exporting() ? 'Exporting…' : 'a. Export .docx' }}
         </fluent-button>
+        <fluent-button appearance="outline" (click)="saveVersionSnapshot()">Save version</fluent-button>
+        <fluent-button appearance="outline" [attr.disabled]="diffBusy() ? true : null" (click)="loadVersionDiff()">
+          {{ diffBusy() ? 'Diffing…' : 'Version diff' }}
+        </fluent-button>
         <fluent-button [attr.disabled]="channelBusy() ? true : null" (click)="saveToBdChannel()">
           {{ channelBusy() ? 'Uploading…' : 'b. Save to BD channel' }}
         </fluent-button>
@@ -146,7 +171,7 @@
       </div>
     </div>
     <p class="gen-hint">
-      Click <strong>a. Export .docx</strong> anytime after generation to download the Word file.
+      Click <strong>a. Export .docx</strong> after completing the compliance checklist (confidential clauses, pricing sensitivity).
       Draft is also auto-saved to PostgreSQL history.
       @if (savedRfp(); as saved) {
         History id: <code>{{ saved.id }}</code>
@@ -155,6 +180,66 @@
         }
       }
     </p>
+    @if (multiApproval(); as a) {
+      <div class="admin-console__cutover" style="margin-top:12px;">
+        <h4>Legal + Sales sign-off</h4>
+        <p class="dash__muted">Overall: {{ a.overallStatus }}</p>
+        @for (r of a.reviews; track r.role) {
+          <div class="pi-fusion-actions" style="margin-bottom:8px;">
+            <strong>{{ r.role }}</strong> — {{ r.status }}
+            <fluent-button appearance="accent" (click)="decideReview(r.role, 'Approved')">Approve</fluent-button>
+            <fluent-button (click)="decideReview(r.role, 'Rejected')">Reject</fluent-button>
+          </div>
+        }
+      </div>
+    }
+    @if (versionDiff(); as diff) {
+      <div class="admin-console__cutover" style="margin-top:12px;">
+        <h4>Version diff (v{{ diff.fromVersion }} → v{{ diff.toVersion }})</h4>
+        <p class="dash__muted">{{ diff.summary }}</p>
+        @if (!diff.sections.length) {
+          <p class="gen-hint">No section changes detected.</p>
+        } @else {
+          <ul class="gen-hint" style="padding-left:1.2rem;">
+            @for (s of diff.sections; track s.title + s.changeKind) {
+              <li>
+                <strong>[{{ s.changeKind }}]</strong> {{ s.title }}
+                @if (s.linesAdded || s.linesRemoved) {
+                  <span> (+{{ s.linesAdded }}/−{{ s.linesRemoved }} lines)</span>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    }
+  </div>
+}
+
+@if (showCompliance()) {
+  <div class="admin-console__cutover" style="margin:16px 0;padding:16px;border:1px solid var(--line);border-radius:8px;">
+    <h4>Export compliance checklist</h4>
+    <p class="gen-hint">Complete required checks for confidential clauses and pricing sensitivity before export.</p>
+    <ul style="list-style:none;padding:0;margin:12px 0;">
+      @for (item of complianceItems(); track item.id) {
+        <li style="margin-bottom:8px;">
+          <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;">
+            <input type="checkbox" [checked]="item.checked" (change)="toggleComplianceItem(item.id)" />
+            <span>
+              {{ item.label }}
+              @if (item.required) { <em>(required)</em> }
+              <small style="display:block;color:var(--ink-muted);">{{ item.category }}</small>
+            </span>
+          </label>
+        </li>
+      }
+    </ul>
+    <div style="display:flex;gap:8px;">
+      <fluent-button appearance="accent" [attr.disabled]="complianceBusy() ? true : null" (click)="submitComplianceAndExport()">
+        {{ complianceBusy() ? 'Submitting…' : 'Complete checklist & export' }}
+      </fluent-button>
+      <fluent-button (click)="showCompliance.set(false)">Cancel</fluent-button>
+    </div>
   </div>
 }
 

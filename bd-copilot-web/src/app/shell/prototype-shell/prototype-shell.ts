@@ -39,7 +39,8 @@ export class PrototypeShell {
       items: [
         { path: '/rfp', label: 'RFP Generator', icon: 'documents' },
         { path: '/business-case', label: 'Business Case', icon: 'scenarios' },
-        { path: '/proposal', label: 'Proposal Generator', icon: 'proposals' }
+        { path: '/proposal', label: 'Proposal Generator', icon: 'proposals' },
+        { path: '/competitive', label: 'Competitive', icon: 'proposals' }
       ]
     },
     {
@@ -47,7 +48,9 @@ export class PrototypeShell {
       items: [
         { path: '/search', label: 'Find & reuse', icon: 'research' },
         { path: '/library', label: 'Document Library', icon: 'portfolio' },
-        { path: '/projects', label: 'Project Intelligence', icon: 'scenarios' }
+        { path: '/projects', label: 'Project Intelligence', icon: 'scenarios' },
+        { path: '/pursuits', label: 'Pursuits', icon: 'scenarios' },
+        { path: '/analytics', label: 'ROI & usage', icon: 'portfolio' }
       ]
     },
     {

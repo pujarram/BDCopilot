@@ -33,6 +33,8 @@ export class Admin implements OnInit {
   protected readonly telemetry = signal<AdminTelemetrySummary | null>(null);
   protected readonly cutover = signal<TenantCutoverStatus | null>(null);
   protected readonly goldenEvalResult = signal<string | null>(null);
+  protected readonly capacityImportResult = signal<string | null>(null);
+  protected readonly capacityImportBusy = signal(false);
 
   protected readonly loading = signal(true);
   protected readonly reindexBusy = signal(false);
@@ -60,6 +62,28 @@ export class Admin implements OnInit {
         console.error(err);
         this.reindexBusy.set(false);
         this.toast.show('Reindex failed — see the browser console.');
+      }
+    });
+  }
+
+  protected importCapacity(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.capacityImportBusy.set(true);
+    this.capacityImportResult.set(null);
+    this.api.importCapacityCsv(file).subscribe({
+      next: r => {
+        this.capacityImportResult.set(r.summary);
+        this.capacityImportBusy.set(false);
+        this.toast.show('Capacity CSV imported.');
+        input.value = '';
+      },
+      error: err => {
+        console.error(err);
+        this.capacityImportBusy.set(false);
+        this.toast.show('Capacity import failed.');
+        input.value = '';
       }
     });
   }

@@ -10,7 +10,9 @@ import {
   RfpDocument,
   RfpDocumentListItem,
   RfpStreamEvent,
-  CorpusSource
+  CorpusSource,
+  ComplianceChecklistItem,
+  GenerationVersionDiff
 } from '../../core/models/api-models';
 
 type StreamStatus = 'queued' | 'writing-title' | 'generating' | 'done' | 'error';
@@ -41,6 +43,7 @@ export class RfpGenerator implements OnInit, OnDestroy {
   protected readonly reuseScope = signal<'All' | 'Last12Months'>('All');
   protected readonly tone = signal('Formal');
   protected readonly corpusSource = signal<CorpusSource>('Online');
+  protected readonly complianceRegion = signal('EU');
   protected readonly focusNotes = signal<string | null>(null);
   protected readonly reuseBanner = signal<SearchReusePayload | null>(null);
 
@@ -58,12 +61,36 @@ export class RfpGenerator implements OnInit, OnDestroy {
   protected readonly selectedSection = signal<GeneratedSection | null>(null);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly progressLabel = signal('');
+  protected readonly dynamicsDeals = signal<import('../../core/models/api-models').DynamicsDealContext[]>([]);
+  protected readonly multiApproval = signal<import('../../core/models/api-models').MultiApprovalStatus | null>(null);
+  protected readonly showCompliance = signal(false);
+  protected readonly complianceItems = signal<ComplianceChecklistItem[]>([]);
+  protected readonly complianceBusy = signal(false);
+  protected readonly versionDiff = signal<GenerationVersionDiff | null>(null);
+  protected readonly diffBusy = signal(false);
+  protected readonly snapshotCount = signal(0);
 
+  private pendingExportFormat: 'docx' | 'pptx' | 'zip' = 'docx';
   private abort: AbortController | null = null;
 
   ngOnInit(): void {
     this.applySearchReuse();
     this.refreshHistory();
+    this.api.listDynamicsDeals().subscribe({
+      next: d => this.dynamicsDeals.set(d),
+      error: err => console.error(err)
+    });
+  }
+
+  protected pullDynamics(clientHint?: string): void {
+    this.api.getDynamicsDealContext(undefined, clientHint || this.customer()).subscribe({
+      next: deal => {
+        this.focusNotes.set(deal.focusNotes);
+        this.customer.set(deal.client);
+        this.toast.show(`Dynamics context loaded for ${deal.client}.`);
+      },
+      error: err => { console.error(err); this.toast.show('Dynamics context unavailable.'); }
+    });
   }
 
   protected clearReuse(): void {
@@ -124,7 +151,15 @@ export class RfpGenerator implements OnInit, OnDestroy {
           this.result.set(updated);
           this.approving.set(false);
           this.persistToDatabase(updated);
-          this.toast.show('Draft approved — export is now enabled.');
+          this.api.startMultiApproval({
+            generationId: updated.generationId,
+            documentTitle: updated.title,
+            userObjectId: this.teams.user().objectId
+          }).subscribe({
+            next: s => this.multiApproval.set(s),
+            error: err => console.error(err)
+          });
+          this.toast.show('Draft approved — collect Legal + Sales sign-off for gated export.');
         },
         error: err => {
           console.error(err);
@@ -134,8 +169,109 @@ export class RfpGenerator implements OnInit, OnDestroy {
       });
   }
 
+  protected decideReview(role: string, status: 'Approved' | 'Rejected'): void {
+    const doc = this.result();
+    if (!doc) return;
+    this.api.decideApproval({
+      generationId: doc.generationId,
+      role,
+      status,
+      userObjectId: this.teams.user().objectId,
+      displayName: this.teams.user().displayName
+    }).subscribe({
+      next: s => {
+        this.multiApproval.set(s);
+        if (s.isFullyApproved) this.toast.show('Legal + Sales both signed off.');
+      },
+      error: err => { console.error(err); this.toast.show('Review update failed.'); }
+    });
+  }
+
   protected exportDocx(): void {
-    this.exportCurrent('docx');
+    this.openComplianceGate('docx');
+  }
+
+  protected openComplianceGate(format: 'docx' | 'pptx' | 'zip' = 'docx'): void {
+    const doc = this.result();
+    if (!doc) return;
+    this.pendingExportFormat = format;
+    this.api.getComplianceChecklist(doc.generationId, doc.title).subscribe({
+      next: checklist => {
+        this.complianceItems.set(checklist.items.map(i => ({ ...i })));
+        this.showCompliance.set(true);
+      },
+      error: err => {
+        console.error(err);
+        this.toast.show('Could not load compliance checklist.');
+      }
+    });
+  }
+
+  protected toggleComplianceItem(id: string): void {
+    this.complianceItems.update(items =>
+      items.map(i => (i.id === id ? { ...i, checked: !i.checked } : i))
+    );
+  }
+
+  protected submitComplianceAndExport(): void {
+    const doc = this.result();
+    if (!doc) return;
+    this.complianceBusy.set(true);
+    this.api.submitComplianceChecklist({
+      generationId: doc.generationId,
+      userObjectId: this.teams.user().objectId,
+      items: this.complianceItems()
+    }).subscribe({
+      next: result => {
+        if (!result.readyForExport) {
+          this.complianceBusy.set(false);
+          this.toast.show(result.message);
+          return;
+        }
+        this.showCompliance.set(false);
+        this.complianceBusy.set(false);
+        this.exportCurrent(this.pendingExportFormat);
+      },
+      error: err => {
+        console.error(err);
+        this.complianceBusy.set(false);
+        this.toast.show('Compliance checklist submission failed.');
+      }
+    });
+  }
+
+  protected saveVersionSnapshot(): void {
+    const doc = this.result();
+    if (!doc) return;
+    this.api.saveGenerationSnapshot({
+      generationId: doc.generationId,
+      userObjectId: this.teams.user().objectId,
+      displayName: this.teams.user().displayName,
+      document: doc
+    }).subscribe({
+      next: snap => {
+        this.snapshotCount.update(n => Math.max(n, snap.versionNumber));
+        this.toast.show(`Saved version ${snap.versionNumber} for diff review.`);
+      },
+      error: err => { console.error(err); this.toast.show('Could not save version snapshot.'); }
+    });
+  }
+
+  protected loadVersionDiff(): void {
+    const doc = this.result();
+    if (!doc) return;
+    this.diffBusy.set(true);
+    this.api.diffGenerationVersions(doc.generationId).subscribe({
+      next: diff => {
+        this.versionDiff.set(diff);
+        this.diffBusy.set(false);
+      },
+      error: err => {
+        console.error(err);
+        this.diffBusy.set(false);
+        this.toast.show('Save a snapshot first to enable version diff.');
+      }
+    });
   }
 
   protected saveToDatabase(): void {
@@ -306,7 +442,8 @@ export class RfpGenerator implements OnInit, OnDestroy {
           tone: this.tone(),
           userObjectId: this.teams.user().objectId,
           corpusSource: this.corpusSource(),
-          focusNotes: this.focusNotes() ?? undefined
+          focusNotes: this.focusNotes() ?? undefined,
+          complianceRegion: this.complianceRegion()
         },
         signal
       );
@@ -389,6 +526,25 @@ export class RfpGenerator implements OnInit, OnDestroy {
         if (evt.document) {
           this.result.set(evt.document);
           this.persistToDatabase(evt.document);
+          this.api.logGovernanceAudit({
+            generationId: evt.document.generationId,
+            userObjectId: this.teams.user().objectId,
+            userDisplayName: this.teams.user().displayName,
+            eventType: 'Generate',
+            resourceType: 'Generation',
+            resourceId: evt.document.generationId,
+            outcome: 'Success',
+            detail: `Generated RFP draft '${evt.document.title}'.`
+          }).subscribe({ error: err => console.error(err) });
+          this.api.saveGenerationSnapshot({
+            generationId: evt.document.generationId,
+            userObjectId: this.teams.user().objectId,
+            displayName: this.teams.user().displayName,
+            document: evt.document
+          }).subscribe({
+            next: s => this.snapshotCount.set(s.versionNumber),
+            error: err => console.error(err)
+          });
         }
         this.generating.set(false);
         this.streaming.set(false);

@@ -24,6 +24,8 @@ public class PlannerSyncService : IPlannerSyncService
     private readonly GraphClientFactory _graphFactory;
     private readonly PlannerSyncSettings _settings;
     private readonly IPlannerSnapshotService _snapshots;
+    private readonly IPlannerTaskIndexService _taskIndex;
+    private readonly IGraphUserDisplayNameService _userNames;
     private readonly ILogger<PlannerSyncService> _logger;
 
     public PlannerSyncService(
@@ -31,12 +33,16 @@ public class PlannerSyncService : IPlannerSyncService
         GraphClientFactory graphFactory,
         IOptions<PlannerSyncSettings> settings,
         IPlannerSnapshotService snapshots,
+        IPlannerTaskIndexService taskIndex,
+        IGraphUserDisplayNameService userNames,
         ILogger<PlannerSyncService> logger)
     {
         _db = db;
         _graphFactory = graphFactory;
         _settings = settings.Value;
         _snapshots = snapshots;
+        _taskIndex = taskIndex;
+        _userNames = userNames;
         _logger = logger;
     }
 
@@ -87,6 +93,7 @@ public class PlannerSyncService : IPlannerSyncService
             result.StatusMessage =
                 $"Synced {result.PlansUpserted} plan(s), {result.BucketsUpserted} bucket(s), {result.TasksUpserted} task(s).";
             await TryCaptureSnapshotAsync(ct);
+            await TryIndexTasksAsync(ct);
             return result;
         }
         catch (Exception ex)
@@ -254,7 +261,17 @@ public class PlannerSyncService : IPlannerSyncService
                     Delayed = list.Count(t => t.IsDelayed),
                     AvgPercentComplete = list.Count == 0
                         ? 0
-                        : Math.Round(list.Average(t => t.PercentComplete), 1)
+                        : Math.Round(list.Average(t => t.PercentComplete), 1),
+                    EstimatedHoursOpen = Math.Round(list
+                        .Where(t => t.PercentComplete < 100)
+                        .Sum(t => t.EstimatedHours > 0
+                            ? t.EstimatedHours * (100 - t.PercentComplete) / 100.0
+                            : 8 * (100 - t.PercentComplete) / 100.0), 1),
+                    EstimatedFte = Math.Round(list
+                        .Where(t => t.PercentComplete < 100)
+                        .Sum(t => t.EstimatedHours > 0
+                            ? t.EstimatedHours * (100 - t.PercentComplete) / 100.0
+                            : 8 * (100 - t.PercentComplete) / 100.0) / 40.0, 2)
                 };
             })
             .OrderByDescending(r => r.Delayed)
@@ -372,7 +389,21 @@ public class PlannerSyncService : IPlannerSyncService
             row.AssignedUsers = ExtractAssigneeKeys(t);
             row.Status = DeriveStatus(row.PercentComplete);
             row.IsDelayed = ComputeDelayed(row);
+            row.EstimatedHours = ComputeEstimatedHours(row);
             row.LastSyncAt = DateTimeOffset.UtcNow;
+
+            try
+            {
+                var details = await graph.Planner.Tasks[t.Id].Details.GetAsync(cancellationToken: ct);
+                if (!string.IsNullOrWhiteSpace(details?.Description))
+                {
+                    row.Description = details.Description.Trim();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not fetch Planner task details for {TaskId}", t.Id);
+            }
 
             if (_db.Entry(row).State == EntityState.Detached)
             {
@@ -383,6 +414,42 @@ public class PlannerSyncService : IPlannerSyncService
         }
 
         await _db.SaveChangesAsync(ct);
+        await ResolveAssigneeDisplayNamesAsync(plan.Id, ct);
+    }
+
+    private async Task ResolveAssigneeDisplayNamesAsync(Guid planId, CancellationToken ct)
+    {
+        var tasks = await _db.PlannerTasks.Where(t => t.PlanId == planId).ToListAsync(ct);
+        var rawIds = tasks
+            .SelectMany(t => (t.AssignedUsers ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(id => Guid.TryParse(id, out _))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (rawIds.Count == 0) return;
+
+        var names = await _userNames.ResolveDisplayNamesAsync(rawIds, ct);
+        foreach (var task in tasks)
+        {
+            if (string.IsNullOrWhiteSpace(task.AssignedUsers)) continue;
+            var parts = task.AssignedUsers.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            task.AssignedUsers = string.Join(", ", parts.Select(p =>
+                names.TryGetValue(p, out var n) ? n : p));
+        }
+
+        await _db.SaveChangesAsync(ct);
+    }
+
+    private async Task TryIndexTasksAsync(CancellationToken ct)
+    {
+        try
+        {
+            await _taskIndex.IndexAllTasksAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Planner task RAG indexing failed.");
+        }
     }
 
     private async Task<PlannerSyncResult> SeedDemoAsync(CancellationToken ct)
@@ -421,6 +488,7 @@ public class PlannerSyncService : IPlannerSyncService
 
             await _db.SaveChangesAsync(ct);
             await TryCaptureSnapshotAsync(ct);
+            await TryIndexTasksAsync(ct);
             return new PlannerSyncResult
             {
                 UsedDemoSeed = true,
@@ -450,22 +518,32 @@ public class PlannerSyncService : IPlannerSyncService
         }
 
         var today = DateTimeOffset.UtcNow.Date;
-        var seedTasks = new[]
+        var seedTasks = new (string Title, DateTime Start, DateTime Due, int Pct, string Status, string BucketId, string Assignee, string Description, double Hours)[]
         {
-            ("Requirements workshop", today.AddDays(-20), today.AddDays(-14), 100, "Completed", "demo-b-done", "Priya Sharma"),
-            ("Solution design", today.AddDays(-13), today.AddDays(-7), 100, "Completed", "demo-b-done", "Alex Chen"),
-            ("Teams bot channel", today.AddDays(-6), today.AddDays(2), 75, "In Progress", "demo-b-progress", "Ramchandra Pujari"),
-            ("SharePoint / Graph sync", today.AddDays(-10), today.AddDays(-1), 40, "In Progress", "demo-b-progress", "Ramchandra Pujari"),
-            ("RFP generator hardening", today.AddDays(-5), today.AddDays(5), 50, "In Progress", "demo-b-progress", "Priya Sharma"),
-            ("Planner intelligence Phase 1", today.AddDays(-2), today.AddDays(8), 25, "In Progress", "demo-b-progress", "Alex Chen"),
-            ("KYC integration spike", today.AddDays(1), today.AddDays(14), 0, "NotStarted", "demo-b-backlog", "Priya Sharma"),
-            ("Document management UX", today.AddDays(3), today.AddDays(18), 0, "NotStarted", "demo-b-backlog", "Alex Chen"),
-            ("UAT & security review", today.AddDays(10), today.AddDays(24), 0, "NotStarted", "demo-b-test", "QA Guild"),
-            ("Go-live checklist", today.AddDays(20), today.AddDays(30), 0, "NotStarted", "demo-b-test", "BD Team")
+            ("Requirements workshop", today.AddDays(-20), today.AddDays(-14), 100, "Completed", "demo-b-done", "Priya Sharma",
+                "Captured wealth RFP scope, security compliance requirements, and delivery timeline from winning proposal language.", 24),
+            ("Solution design", today.AddDays(-13), today.AddDays(-7), 100, "Completed", "demo-b-done", "Alex Chen",
+                "Architecture aligned to RFP security and compliance clauses; Entra SSO and SharePoint-grounded retrieval.", 32),
+            ("Teams bot channel", today.AddDays(-6), today.AddDays(2), 75, "In Progress", "demo-b-progress", "Ramchandra Pujari",
+                "Adaptive Cards for sprint, insights, unified briefs; Teams iframe SSO.", 16),
+            ("SharePoint / Graph sync", today.AddDays(-10), today.AddDays(-1), 40, "In Progress", "demo-b-progress", "Ramchandra Pujari",
+                "Delta sync for RFP corpus folders; APPLICATION permissions Sites.Read.All + Files.Read.All. STALLED — no progress in 7 days.", 40),
+            ("RFP generator hardening", today.AddDays(-5), today.AddDays(5), 50, "In Progress", "demo-b-progress", "Priya Sharma",
+                "Ground generation on winning RFP clauses; citation trimming and approve/export workflow.", 24),
+            ("Planner intelligence Phase 1", today.AddDays(-2), today.AddDays(8), 25, "In Progress", "demo-b-progress", "Alex Chen",
+                "Gantt, workload, AI PM insights, burndown from Planner snapshots.", 20),
+            ("KYC integration spike", today.AddDays(1), today.AddDays(14), 0, "NotStarted", "demo-b-backlog", "Priya Sharma",
+                "Spike for KYC data feed into pursuit tracker.", 12),
+            ("Document management UX", today.AddDays(3), today.AddDays(18), 0, "NotStarted", "demo-b-backlog", "Alex Chen",
+                "Library filters, corpus source picker, open-from-citation.", 16),
+            ("UAT & security review", today.AddDays(10), today.AddDays(24), 0, "NotStarted", "demo-b-test", "QA Guild",
+                "Validate ACL audit trail and EnforceAcl cutover.", 24),
+            ("Go-live checklist", today.AddDays(20), today.AddDays(30), 0, "NotStarted", "demo-b-test", "BD Team",
+                "12/12 tenant cutover gate before customer demo.", 8)
         };
 
         var n = 0;
-        foreach (var (title, start, due, pct, status, bucketId, assignee) in seedTasks)
+        foreach (var (title, start, due, pct, status, bucketId, assignee, description, hours) in seedTasks)
         {
             n++;
             var row = new TaskEntity
@@ -473,6 +551,7 @@ public class PlannerSyncService : IPlannerSyncService
                 PlanId = plan.Id,
                 GraphTaskId = $"demo-task-{n}",
                 Title = title,
+                Description = description,
                 StartDate = new DateTimeOffset(start, TimeSpan.Zero),
                 DueDate = new DateTimeOffset(due, TimeSpan.Zero),
                 PercentComplete = pct,
@@ -480,6 +559,7 @@ public class PlannerSyncService : IPlannerSyncService
                 GraphBucketId = bucketId,
                 BucketName = buckets.First(b => b.Item1 == bucketId).Item2,
                 AssignedUsers = assignee,
+                EstimatedHours = hours,
                 LastSyncAt = DateTimeOffset.UtcNow
             };
             row.IsDelayed = ComputeDelayed(row);
@@ -488,6 +568,7 @@ public class PlannerSyncService : IPlannerSyncService
 
         await _db.SaveChangesAsync(ct);
         await TryCaptureSnapshotAsync(ct);
+        await TryIndexTasksAsync(ct);
 
         return new PlannerSyncResult
         {
@@ -528,4 +609,18 @@ public class PlannerSyncService : IPlannerSyncService
         t.PercentComplete < 100
         && t.DueDate.HasValue
         && t.DueDate.Value.UtcDateTime.Date < DateTime.UtcNow.Date;
+
+    private static double ComputeEstimatedHours(TaskEntity t)
+    {
+        if (t.PercentComplete >= 100) return 0;
+        if (t.EstimatedHours > 0) return t.EstimatedHours;
+
+        if (t.StartDate.HasValue && t.DueDate.HasValue)
+        {
+            var days = Math.Max(1, (t.DueDate.Value - t.StartDate.Value).TotalDays);
+            return Math.Clamp(days * 6, 4, 40);
+        }
+
+        return 8;
+    }
 }

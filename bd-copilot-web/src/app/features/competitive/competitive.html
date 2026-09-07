@@ -1,0 +1,88 @@
+<div class="panel-head">
+  <div>
+    <h2>Competitive positioning</h2>
+    <p>Battlecard-grounded brief from the curated corpus. Pull Dynamics deal context to replace manual focus notes. Export requires Legal + Sales sign-off.</p>
+  </div>
+</div>
+
+@if (deals().length) {
+  <div class="reuse-banner" style="margin-bottom:1rem;">
+    <strong>Dynamics deal context</strong>
+    <p>Select a deal to fill customer context automatically.</p>
+    <div class="pi-fusion-actions">
+      @for (d of deals(); track d.opportunityId) {
+        <fluent-button appearance="outline" (click)="applyDeal(d)">
+          {{ d.client }} · {{ d.stage }}
+        </fluent-button>
+      }
+    </div>
+  </div>
+}
+
+<div class="form-grid">
+  <div class="field">
+    <label for="comp-vs">Competitor</label>
+    <fluent-text-input id="comp-vs" [attr.value]="competitor()" (input)="competitor.set($any($event.target).value)"></fluent-text-input>
+  </div>
+  <div class="field">
+    <label for="comp-ours">Our solution</label>
+    <fluent-text-input id="comp-ours" [attr.value]="ourSolution()" (input)="ourSolution.set($any($event.target).value)"></fluent-text-input>
+  </div>
+  <div class="field">
+    <label for="comp-region">Compliance region</label>
+    <select id="comp-region" [value]="complianceRegion()" (change)="complianceRegion.set($any($event.target).value)">
+      <option value="EU">EU / GDPR</option>
+      <option value="US">US</option>
+      <option value="FI">Finland</option>
+    </select>
+  </div>
+  <div class="field field--full">
+    <label for="comp-ctx">Customer / deal context</label>
+    <textarea id="comp-ctx" rows="3" [value]="customerContext()" (input)="customerContext.set($any($event.target).value)"></textarea>
+  </div>
+</div>
+
+<fluent-button appearance="accent" [attr.disabled]="generating() ? true : null" (click)="generate()">
+  {{ generating() ? 'Generating…' : 'Generate competitive brief' }}
+</fluent-button>
+
+@if (progressLabel()) {
+  <div class="gen-progress" aria-live="polite">{{ progressLabel() }}</div>
+}
+@if (errorMessage()) {
+  <div class="error-banner">{{ errorMessage() }}</div>
+}
+
+@if (result(); as doc) {
+  <section style="margin-top:1.25rem;">
+    <h3>{{ doc.title }}</h3>
+    <p class="pi-muted">Status: {{ doc.status }}</p>
+    @for (s of sections(); track s.order) {
+      <article style="margin:1rem 0;">
+        <h4>{{ s.title }}</h4>
+        <p style="white-space:pre-wrap;">{{ s.content }}</p>
+      </article>
+    }
+  </section>
+}
+
+@if (approval(); as a) {
+  <section class="admin-console__cutover" style="margin-top:1rem;">
+    <h3>Multi-reviewer approval</h3>
+    <p class="dash__muted">Overall: <strong>{{ a.overallStatus }}</strong>
+      @if (a.isFullyApproved) { — ready for export }
+    </p>
+    <ul class="dash-checklist">
+      @for (r of a.reviews; track r.role) {
+        <li [class.is-ok]="r.status === 'Approved'">
+          <strong>{{ r.role }}</strong> — {{ r.status }}
+          @if (r.reviewerDisplayName) { ({{ r.reviewerDisplayName }}) }
+          <div class="pi-fusion-actions">
+            <fluent-button appearance="accent" (click)="decide(r.role, 'Approved')">Approve as {{ r.role }}</fluent-button>
+            <fluent-button (click)="decide(r.role, 'Rejected')">Reject</fluent-button>
+          </div>
+        </li>
+      }
+    </ul>
+  </section>
+}

@@ -23,6 +23,8 @@ public sealed class TeamsChannelService : ITeamsChannelService
     private readonly IPlannerSyncService _planner;
     private readonly IProjectManagerService _projectManager;
     private readonly IUnifiedIntelligenceService _unified;
+    private readonly IPlannerSnapshotService _snapshots;
+    private readonly IPipelineCapacityService _pipeline;
     private readonly TeamsBotSettings _settings;
     private readonly ILogger<TeamsChannelService> _logger;
 
@@ -32,6 +34,8 @@ public sealed class TeamsChannelService : ITeamsChannelService
         IPlannerSyncService planner,
         IProjectManagerService projectManager,
         IUnifiedIntelligenceService unified,
+        IPlannerSnapshotService snapshots,
+        IPipelineCapacityService pipeline,
         IOptions<TeamsBotSettings> settings,
         ILogger<TeamsChannelService> logger)
     {
@@ -40,6 +44,8 @@ public sealed class TeamsChannelService : ITeamsChannelService
         _planner = planner;
         _projectManager = projectManager;
         _unified = unified;
+        _snapshots = snapshots;
+        _pipeline = pipeline;
         _settings = settings.Value;
         _logger = logger;
     }
@@ -118,6 +124,48 @@ public sealed class TeamsChannelService : ITeamsChannelService
             return Reply(
                 $"**Project Intelligence** dashboard:\n{TabUrl("/projects")}\n\n"
                 + "Try: `delayed`, `workload`, `sprint`, `due next week`, or `tasks for <name>`.");
+        }
+
+        if (IsExactOrContains(lower, "stalled", "no progress", "stuck")
+            && LooksLikeProjectIntent(lower))
+        {
+            var alerts = await _snapshots.GetStalledAlertsAsync(7, ct);
+            var dash = TabUrl("/projects?view=stalled");
+            var textBody = alerts.Count == 0
+                ? "**No stalled tasks** — progress changed within 7 days."
+                : "**Stalled tasks (7+ days)**\n" + string.Join("\n",
+                    alerts.Take(6).Select(a => $"• {a.Title} — {a.PercentComplete}% · {a.AssignedUsers ?? "Unassigned"}"));
+            return Reply(
+                textBody + $"\n\n{dash}",
+                TeamsAdaptiveCardBuilder.StalledAlertCard(alerts, dash));
+        }
+
+        if (IsExactOrContains(lower, "pursuit", "deadline", "closing soon")
+            && (LooksLikeProjectIntent(lower) || lower.Contains("pursuit") || lower.Contains("deadline")))
+        {
+            var alerts = await _pipeline.GetPursuitDeadlineAlertsAsync(14, ct);
+            var dash = TabUrl("/projects?view=pipeline");
+            var textBody = alerts.Count == 0
+                ? "**No pursuit deadlines** in the next 14 days."
+                : "**Pursuit deadlines (14 days)**\n" + string.Join("\n",
+                    alerts.Take(6).Select(a => $"• {a.Name} ({a.Client}) — {a.DaysRemaining}d · {a.Stage}"));
+            return Reply(
+                textBody + $"\n\n{dash}",
+                TeamsAdaptiveCardBuilder.PursuitDeadlineCard(alerts, dash));
+        }
+
+        if (IsExactOrContains(lower, "stale", "outdated document", "old document")
+            && (LooksLikeDocQuestion(lower) || lower.Contains("stale")))
+        {
+            var alerts = await _pipeline.GetStaleDocumentAlertsAsync(ct);
+            var dash = TabUrl("/library?stale=true");
+            var textBody = alerts.Count == 0
+                ? "**No stale library documents** detected."
+                : "**Stale documents**\n" + string.Join("\n",
+                    alerts.Take(6).Select(a => $"• {a.FileName} — {a.MonthsSinceModified}mo old"));
+            return Reply(
+                textBody + $"\n\n{dash}",
+                TeamsAdaptiveCardBuilder.StaleDocumentCard(alerts, dash));
         }
 
         if (IsExactOrContains(lower, "delayed", "overdue")
@@ -630,7 +678,9 @@ public sealed class TeamsChannelService : ITeamsChannelService
         || lower.Contains("insight")
         || lower.Contains("report")
         || lower.Contains("stakeholder")
-        || lower.Contains("staffing");
+        || lower.Contains("staffing")
+        || lower.Contains("stalled")
+        || lower.Contains("stuck");
 
     private static bool LooksLikeDocQuestion(string lower) =>
         lower.Contains("rfp")

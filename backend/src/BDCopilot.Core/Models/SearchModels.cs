@@ -26,6 +26,15 @@ public class DocumentListItem
 
     /// <summary>Local | Online</summary>
     public string CorpusSource { get; set; } = CorpusSources.Online;
+
+    public DateTimeOffset? LastIndexedAt { get; set; }
+
+    /// <summary>True when ModifiedDate is older than LibraryStaleness:StaleAfterMonths.</summary>
+    public bool IsStale { get; set; }
+
+    public int MonthsSinceModified { get; set; }
+
+    public int StaleAfterMonths { get; set; } = 6;
 }
 
 /// <summary>Knowledge Search: retrieve + grounded short answer.</summary>

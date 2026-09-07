@@ -34,6 +34,14 @@ public interface IDocumentGeneratorService
     Task<GeneratedDocument> GenerateProposalAsync(ProposalGenerationRequest request, CancellationToken ct = default);
 
     IAsyncEnumerable<RfpStreamEvent> GenerateProposalStreamAsync(ProposalGenerationRequest request, CancellationToken ct = default);
+
+    Task<GeneratedDocument> GenerateCompetitivePositioningAsync(
+        CompetitivePositioningRequest request,
+        CancellationToken ct = default);
+
+    IAsyncEnumerable<RfpStreamEvent> GenerateCompetitivePositioningStreamAsync(
+        CompetitivePositioningRequest request,
+        CancellationToken ct = default);
 }
 
 /// <summary>Builds Word, PowerPoint, and ZIP exports from a generated document draft.</summary>

@@ -2,6 +2,7 @@ using System.Text.Json;
 using BDCopilot.Core.Interfaces;
 using BDCopilot.Core.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace BDCopilot.Api.Controllers;
 
@@ -18,11 +19,20 @@ public class GeneratorsController : ControllerBase
     };
 
     private readonly IDocumentGeneratorService _generator;
+    private readonly CompliancePackSettings _compliance;
 
-    public GeneratorsController(IDocumentGeneratorService generator)
+    public GeneratorsController(
+        IDocumentGeneratorService generator,
+        IOptions<CompliancePackSettings> compliance)
     {
         _generator = generator;
+        _compliance = compliance.Value;
     }
+
+    [HttpGet("compliance-packs")]
+    [ProducesResponseType(typeof(CompliancePackSettings), StatusCodes.Status200OK)]
+    public ActionResult<CompliancePackSettings> CompliancePacks()
+        => Ok(_compliance);
 
     /// <summary>Draft an RFP response by reusing your strongest previous answers.</summary>
     [HttpPost("rfp")]
@@ -91,6 +101,30 @@ public class GeneratorsController : ControllerBase
         Response.Headers["X-Accel-Buffering"] = "no";
 
         await foreach (var evt in _generator.GenerateProposalStreamAsync(request, ct))
+        {
+            var json = JsonSerializer.Serialize(evt, StreamJson);
+            await Response.WriteAsync($"event: {evt.Type}\ndata: {json}\n\n", ct);
+            await Response.Body.FlushAsync(ct);
+        }
+    }
+
+    [HttpPost("competitive")]
+    [ProducesResponseType(typeof(GeneratedDocument), StatusCodes.Status200OK)]
+    public async Task<ActionResult<GeneratedDocument>> Competitive(
+        [FromBody] CompetitivePositioningRequest request,
+        CancellationToken ct)
+        => Ok(await _generator.GenerateCompetitivePositioningAsync(request, ct));
+
+    [HttpPost("competitive/stream")]
+    [Produces("text/event-stream")]
+    public async Task CompetitiveStream([FromBody] CompetitivePositioningRequest request, CancellationToken ct)
+    {
+        Response.Headers.ContentType = "text/event-stream";
+        Response.Headers.CacheControl = "no-cache";
+        Response.Headers.Connection = "keep-alive";
+        Response.Headers["X-Accel-Buffering"] = "no";
+
+        await foreach (var evt in _generator.GenerateCompetitivePositioningStreamAsync(request, ct))
         {
             var json = JsonSerializer.Serialize(evt, StreamJson);
             await Response.WriteAsync($"event: {evt.Type}\ndata: {json}\n\n", ct);

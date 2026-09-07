@@ -1,0 +1,92 @@
+<div class="panel-head">
+  <div>
+    <h2>Pursuit tracker</h2>
+    <p>Link generated docs to deals (client, size, stage, owner, deadline). Tag RFP win/loss to boost retrieval toward winning language.</p>
+  </div>
+</div>
+
+<section class="form-grid" style="margin-bottom: 1.25rem;">
+  <div class="field">
+    <label for="opp-name">Opportunity</label>
+    <fluent-text-input id="opp-name" [attr.value]="name()" (input)="name.set($any($event.target).value)"></fluent-text-input>
+  </div>
+  <div class="field">
+    <label for="opp-client">Client</label>
+    <fluent-text-input id="opp-client" [attr.value]="client()" (input)="client.set($any($event.target).value)"></fluent-text-input>
+  </div>
+  <div class="field">
+    <label for="opp-size">Deal size</label>
+    <fluent-text-input id="opp-size" [attr.value]="dealSize()" (input)="dealSize.set($any($event.target).value)"></fluent-text-input>
+  </div>
+  <div class="field">
+    <label for="opp-stage">Stage</label>
+    <select id="opp-stage" [value]="stage()" (change)="stage.set($any($event.target).value)">
+      <option>Lead</option>
+      <option>Qualify</option>
+      <option>Propose</option>
+      <option>Negotiate</option>
+      <option>ClosedWon</option>
+      <option>ClosedLost</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="opp-owner">Owner</label>
+    <fluent-text-input id="opp-owner" [attr.value]="owner()" (input)="owner.set($any($event.target).value)"></fluent-text-input>
+  </div>
+  <div class="field" style="align-self:end;">
+    <fluent-button appearance="accent" (click)="create()">Add opportunity</fluent-button>
+  </div>
+</section>
+
+@if (loading()) {
+  <p class="pi-muted">Loading pursuits…</p>
+} @else {
+  <h3>Opportunities</h3>
+  @if (!opportunities().length) {
+    <p class="pi-muted">No opportunities yet — create one above.</p>
+  } @else {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Client</th><th>Size</th><th>Stage</th><th>Owner</th><th>Outcome</th><th>Linked docs</th></tr>
+        </thead>
+        <tbody>
+          @for (o of opportunities(); track o.id) {
+            <tr>
+              <td>{{ o.name }}</td>
+              <td>{{ o.client }}</td>
+              <td>{{ o.dealSize != null ? (o.dealSize | number:'1.0-0') : '—' }}</td>
+              <td>{{ o.stage }}</td>
+              <td>{{ o.ownerDisplayName || '—' }}</td>
+              <td>{{ o.outcome }}</td>
+              <td>{{ o.linkedDocuments.length || 0 }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <h3 style="margin-top:1.5rem;">RFP win / loss tags</h3>
+  <p class="pi-muted">Tagging <strong>Win</strong> boosts Online documents whose names match the customer in retrieval ranking.</p>
+  @if (!rfps().length) {
+    <p class="pi-muted">No saved RFPs yet — generate and save an RFP first.</p>
+  } @else {
+    <ul class="pi-fusion-list">
+      @for (r of rfps(); track r.id) {
+        <li>
+          <strong>{{ r.title }}</strong> · {{ r.customer }}
+          <span class="pi-fusion-meta">Outcome: {{ r.outcome || 'Open' }} · {{ r.createdAt | date:'mediumDate' }}</span>
+          <div class="pi-fusion-actions">
+            <fluent-button appearance="accent" (click)="tagOutcome(r.id, 'Win')">Win</fluent-button>
+            <fluent-button (click)="tagOutcome(r.id, 'Loss')">Loss</fluent-button>
+            <fluent-button appearance="outline" (click)="tagOutcome(r.id, 'Open')">Clear</fluent-button>
+            @for (o of opportunities(); track o.id) {
+              <fluent-button appearance="outline" (click)="linkRfp(o.id, r)">Link → {{ o.name }}</fluent-button>
+            }
+          </div>
+        </li>
+      }
+    </ul>
+  }
+}

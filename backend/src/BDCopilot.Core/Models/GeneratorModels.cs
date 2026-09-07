@@ -36,6 +36,12 @@ public class RfpGenerationRequest
 
     /// <summary>Optional excerpt / notes from Knowledge Search “Use in RFP”.</summary>
     public string? FocusNotes { get; set; }
+
+    /// <summary>ISO language tag override, e.g. fi-FI. Falls back to compliance pack export language.</summary>
+    public string? Language { get; set; }
+
+    /// <summary>Region compliance pack key: EU, US, FI (see CompliancePacks config).</summary>
+    public string? ComplianceRegion { get; set; }
 }
 
 public class BusinessCaseGenerationRequest
@@ -47,6 +53,9 @@ public class BusinessCaseGenerationRequest
 
     /// <summary>Optional excerpt / notes from Knowledge Search “Use in Business Case”.</summary>
     public string? FocusNotes { get; set; }
+
+    public string? Language { get; set; }
+    public string? ComplianceRegion { get; set; }
 }
 
 public class ProposalGenerationRequest
@@ -56,6 +65,9 @@ public class ProposalGenerationRequest
     public bool IncludeArchitectureDiagram { get; set; } = true;
     public required string UserObjectId { get; set; }
     public string CorpusSource { get; set; } = CorpusSources.Online;
+
+    public string? Language { get; set; }
+    public string? ComplianceRegion { get; set; }
 }
 
 /// <summary>Server-sent event payload for live RFP generation (section-by-section + tokens).</summary>

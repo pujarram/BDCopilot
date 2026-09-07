@@ -1,7 +1,7 @@
 <div class="panel-head">
   <div>
     <h2>Document Library</h2>
-    <p>Indexed files from Local (docs folder) and Online (SharePoint). Choose a source filter, then index or sync.</p>
+    <p>Indexed files from Local, Online, Planner, and Battlecards. Stale content (untouched for N months) is flagged for refresh.</p>
   </div>
 </div>
 
@@ -20,8 +20,18 @@
       <input type="radio" name="lib-corpus" value="Online" [checked]="corpusSource() === 'Online'" (change)="setCorpus('Online')" />
       Online
     </label>
+    <label class="corpus-radio">
+      <input type="radio" name="lib-corpus" value="Battlecards" [checked]="corpusSource() === 'Battlecards'" (change)="setCorpus('Battlecards')" />
+      Battlecards
+    </label>
   </div>
 </div>
+
+@if (staleCount() > 0) {
+  <div class="error-banner" style="margin-bottom:12px;">
+    {{ staleCount() }} document(s) flagged stale (modified more than {{ staleMonths() }} months ago). Re-sync or refresh source content.
+  </div>
+}
 
 @if (syncHealth(); as health) {
   <div class="sync-health-banner" [class.unhealthy]="!health.isHealthy">
@@ -61,16 +71,25 @@
   <div class="table-wrap">
     <table>
       <thead>
-        <tr><th>File</th><th>Type</th><th>Source</th><th>Channel</th><th>Modified</th><th>Access</th><th>Index status</th></tr>
+        <tr><th>File</th><th>Type</th><th>Source</th><th>Channel</th><th>Modified</th><th>Freshness</th><th>Access</th><th>Index status</th></tr>
       </thead>
       <tbody>
         @for (doc of documents(); track doc.documentId) {
-          <tr>
+          <tr [class.is-stale]="doc.isStale">
             <td>{{ doc.fileName }}</td>
             <td><span class="filetag">.{{ doc.fileType }}</span></td>
             <td>{{ doc.corpusSource || 'Online' }}</td>
             <td>{{ doc.teamsChannel }}</td>
             <td>{{ doc.modifiedDate | date: 'yyyy-MM-dd' }}</td>
+            <td>
+              @if (doc.isStale) {
+                <fluent-badge appearance="outline" color="danger">
+                  Stale · {{ doc.monthsSinceModified }}mo
+                </fluent-badge>
+              } @else {
+                <fluent-badge appearance="filled" color="success">Fresh</fluent-badge>
+              }
+            </td>
             <td>
               <fluent-badge [attr.appearance]="doc.accessibleToCaller ? 'filled' : 'outline'"
                             [attr.color]="doc.accessibleToCaller ? 'success' : 'danger'">

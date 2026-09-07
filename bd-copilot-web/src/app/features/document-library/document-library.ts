@@ -1,4 +1,4 @@
-import { CUSTOM_ELEMENTS_SCHEMA, Component, OnInit, inject, signal } from '@angular/core';
+import { CUSTOM_ELEMENTS_SCHEMA, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ApiService } from '../../core/services/api.service';
 import { TeamsService } from '../../core/services/teams.service';
@@ -22,6 +22,8 @@ export class DocumentLibrary implements OnInit {
   protected readonly syncBusy = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly corpusSource = signal<CorpusSource | 'All'>('All');
+  protected readonly staleCount = computed(() => this.documents().filter(d => d.isStale).length);
+  protected readonly staleMonths = computed(() => this.documents().find(d => d.staleAfterMonths)?.staleAfterMonths ?? 6);
 
   ngOnInit(): void {
     this.loadSyncHealth();

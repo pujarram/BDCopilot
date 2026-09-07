@@ -22,23 +22,20 @@ public interface IRfpHistoryService
 public class RfpHistoryService : IRfpHistoryService
 {
     private readonly BdCopilotDbContext _db;
-    private readonly IDocumentExportService _export;
-    private readonly IBlobStorageService _blobs;
+    private readonly IGenerationWorkflowService _workflow;
     private readonly GraphClientFactory _graphFactory;
     private readonly GraphSyncSettings _graphSettings;
     private readonly ILogger<RfpHistoryService> _logger;
 
     public RfpHistoryService(
         BdCopilotDbContext db,
-        IDocumentExportService export,
-        IBlobStorageService blobs,
+        IGenerationWorkflowService workflow,
         GraphClientFactory graphFactory,
         IOptions<GraphSyncSettings> graphSettings,
         ILogger<RfpHistoryService> logger)
     {
         _db = db;
-        _export = export;
-        _blobs = blobs;
+        _workflow = workflow;
         _graphFactory = graphFactory;
         _graphSettings = graphSettings.Value;
         _logger = logger;
@@ -128,7 +125,9 @@ public class RfpHistoryService : IRfpHistoryService
                 CreatedByDisplayName = r.CreatedByDisplayName,
                 CreatedAt = r.CreatedAt,
                 ChannelUploadStatus = r.ChannelUploadStatus,
-                ChannelSharePointUrl = r.ChannelSharePointUrl
+                ChannelSharePointUrl = r.ChannelSharePointUrl,
+                Outcome = r.Outcome,
+                OpportunityId = r.OpportunityId
             })
             .ToListAsync(ct);
     }
@@ -142,8 +141,7 @@ public class RfpHistoryService : IRfpHistoryService
             ?? throw new InvalidOperationException($"RFP document {id} was not found.");
 
         var generated = ToGeneratedDocument(row);
-        var result = await new GenerationWorkflowService(_export, _blobs, _db, Microsoft.Extensions.Logging.Abstractions.NullLogger<GenerationWorkflowService>.Instance)
-            .ExportAsync(new ExportGenerationRequest
+        var result = await _workflow.ExportAsync(new ExportGenerationRequest
             {
                 GenerationId = row.GenerationId,
                 UserObjectId = userObjectId,

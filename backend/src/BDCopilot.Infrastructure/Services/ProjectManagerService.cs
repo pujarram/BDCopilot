@@ -36,6 +36,7 @@ public sealed class ProjectManagerService : IProjectManagerService
         var predictions = PredictDelays(tasks, today);
         var modules = AssessModules(tasks);
         var staffing = RecommendStaffing(tasks, modules);
+        var healthExplanation = BuildHealthExplanation(tasks, score, risk);
 
         var summary =
             $"Health score **{score}/100** ({risk}). " +
@@ -50,7 +51,8 @@ public sealed class ProjectManagerService : IProjectManagerService
             GeneratedAt = DateTimeOffset.UtcNow,
             DelayPredictions = predictions,
             ModulesAtRisk = modules,
-            StaffingRecommendations = staffing
+            StaffingRecommendations = staffing,
+            HealthExplanation = healthExplanation
         };
     }
 
@@ -287,7 +289,8 @@ public sealed class ProjectManagerService : IProjectManagerService
                 IsAlreadyDelayed = t.IsDelayed,
                 PredictedSlipDays = slip,
                 RiskLevel = risk,
-                Rationale = rationale
+                Rationale = rationale,
+                WhyExplanation = BuildDelayWhy(t, slip, risk, rationale)
             });
         }
 
@@ -412,6 +415,116 @@ public sealed class ProjectManagerService : IProjectManagerService
         }
 
         return recs.Take(12).ToList();
+    }
+
+    private static HealthScoreExplanation BuildHealthExplanation(
+        IReadOnlyList<PlannerTaskItem> tasks,
+        int score,
+        string risk)
+    {
+        var delayed = tasks.Count(t => t.IsDelayed);
+        var completed = tasks.Count(t => t.PercentComplete >= 100 || t.Status == "Completed");
+        var notStarted = tasks.Count(t => t.PercentComplete == 0 && t.Status != "Completed");
+        var completion = tasks.Count == 0 ? 0 : 100.0 * completed / tasks.Count;
+        var notStartedRatio = tasks.Count == 0 ? 0 : (double)notStarted / tasks.Count;
+        var overdueDays = tasks
+            .Where(t => t.IsDelayed && t.DueDate.HasValue)
+            .Sum(t => Math.Max(0, (DateTime.UtcNow.Date - t.DueDate!.Value.UtcDateTime.Date).TotalDays));
+
+        var factors = new List<ScoreFactor>();
+        if (delayed > 0)
+        {
+            factors.Add(new ScoreFactor
+            {
+                Factor = "Delayed tasks",
+                ImpactPoints = Math.Min(40, delayed * 8),
+                Direction = "negative",
+                Detail = $"{delayed} overdue task(s) reduce the score by up to 8 points each."
+            });
+        }
+
+        if (notStartedRatio > 0.2)
+        {
+            factors.Add(new ScoreFactor
+            {
+                Factor = "Not started work",
+                ImpactPoints = (int)Math.Min(20, notStartedRatio * 25),
+                Direction = "negative",
+                Detail = $"{notStarted} task(s) ({notStartedRatio:P0}) have not started."
+            });
+        }
+
+        if (completion < 60)
+        {
+            factors.Add(new ScoreFactor
+            {
+                Factor = "Low completion rate",
+                ImpactPoints = completion < 40 ? 15 : 8,
+                Direction = "negative",
+                Detail = $"Only {completion:0.#}% of tasks are complete."
+            });
+        }
+        else if (completion >= 85)
+        {
+            factors.Add(new ScoreFactor
+            {
+                Factor = "Strong completion",
+                ImpactPoints = 5,
+                Direction = "positive",
+                Detail = $"{completion:0.#}% completion adds a small boost."
+            });
+        }
+
+        if (overdueDays > 0)
+        {
+            factors.Add(new ScoreFactor
+            {
+                Factor = "Overdue pressure",
+                ImpactPoints = (int)Math.Min(15, overdueDays / 3.0),
+                Direction = "negative",
+                Detail = $"Cumulative {overdueDays:0} overdue day(s) across delayed tasks."
+            });
+        }
+
+        if (factors.Count == 0)
+        {
+            factors.Add(new ScoreFactor
+            {
+                Factor = "Baseline",
+                ImpactPoints = 0,
+                Direction = "neutral",
+                Detail = "No major negative drivers — score reflects steady progress."
+            });
+        }
+
+        var narrative = $"Score {score}/100 ({risk}) driven by "
+                        + string.Join("; ", factors.Take(3).Select(f => f.Factor.ToLowerInvariant()))
+                        + ".";
+
+        return new HealthScoreExplanation
+        {
+            HealthScore = score,
+            RiskLevel = risk,
+            Factors = factors,
+            Narrative = narrative
+        };
+    }
+
+    private static string BuildDelayWhy(
+        PlannerTaskItem task,
+        int slip,
+        string risk,
+        string rationale)
+    {
+        var owner = string.IsNullOrWhiteSpace(task.AssignedUsers) ? "Unassigned" : task.AssignedUsers!;
+        var module = string.IsNullOrWhiteSpace(task.BucketName) ? "Uncategorized" : task.BucketName!;
+        return risk switch
+        {
+            "High" => $"High delay risk because {owner} on '{module}' is {task.PercentComplete}% done "
+                      + $"with ~{slip}d slip — {rationale}",
+            "Medium" => $"Medium risk: progress vs due date on '{task.Title}' ({module}) — {rationale}",
+            _ => $"Watch item: {rationale} Owner: {owner}."
+        };
     }
 
     private static void AddParagraph(MainDocumentPart mainPart, string text, bool bold = false, int size = 20)

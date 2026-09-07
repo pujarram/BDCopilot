@@ -10,6 +10,7 @@ public class ProjectManagerInsight
     public List<DelayPredictionItem> DelayPredictions { get; set; } = [];
     public List<ModuleAtRiskItem> ModulesAtRisk { get; set; } = [];
     public List<StaffingRecommendation> StaffingRecommendations { get; set; } = [];
+    public HealthScoreExplanation? HealthExplanation { get; set; }
 }
 
 public class DelayPredictionItem
@@ -25,6 +26,8 @@ public class DelayPredictionItem
     public int PredictedSlipDays { get; set; }
     public string RiskLevel { get; set; } = "Low";
     public string Rationale { get; set; } = "";
+    /// <summary>Plain-language "why" for reviewers (Phase 9).</summary>
+    public string WhyExplanation { get; set; } = "";
 }
 
 public class ModuleAtRiskItem

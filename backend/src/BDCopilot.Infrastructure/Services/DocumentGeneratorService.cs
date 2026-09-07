@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using BDCopilot.Core.Interfaces;
 using BDCopilot.Core.Models;
+using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 
@@ -34,11 +35,16 @@ public class DocumentGeneratorService : IDocumentGeneratorService
 
     private readonly ISemanticKernelFactory _kernelFactory;
     private readonly IVectorSearchService _vectorSearch;
+    private readonly CompliancePackSettings _compliance;
 
-    public DocumentGeneratorService(ISemanticKernelFactory kernelFactory, IVectorSearchService vectorSearch)
+    public DocumentGeneratorService(
+        ISemanticKernelFactory kernelFactory,
+        IVectorSearchService vectorSearch,
+        IOptions<CompliancePackSettings> compliance)
     {
         _kernelFactory = kernelFactory;
         _vectorSearch = vectorSearch;
+        _compliance = compliance.Value;
     }
 
     public async Task<GeneratedDocument> GenerateRfpAsync(RfpGenerationRequest request, CancellationToken ct = default)
@@ -121,10 +127,11 @@ public class DocumentGeneratorService : IDocumentGeneratorService
             var instruction =
                 $"Write the \"{title}\" section of an RFP response titled \"{request.Title}\" for {request.Customer}. " +
                 $"Tone: {request.Tone}. Base it only on the SOURCES." +
-                FocusInstruction(request.FocusNotes);
+                FocusInstruction(request.FocusNotes) +
+                GenerationContextSuffix(request.Language, request.ComplianceRegion);
 
             var contentBuilder = new StringBuilder();
-            await foreach (var delta in DraftSectionStreamAsync(instruction, relevant, ct))
+            await foreach (var delta in DraftSectionStreamAsync(instruction, relevant, request.Language, request.ComplianceRegion, ct))
             {
                 if (string.IsNullOrEmpty(delta))
                 {
@@ -237,10 +244,11 @@ public class DocumentGeneratorService : IDocumentGeneratorService
                 $"Write the \"{title}\" section of a business case for initiative \"{request.Initiative}\", " +
                 $"pitched at a {request.Audience}. Base it only on the SOURCES. Be concrete about benefits, " +
                 "ROI ranges, risks, and next steps when the section calls for them." +
-                FocusInstruction(request.FocusNotes);
+                FocusInstruction(request.FocusNotes) +
+                GenerationContextSuffix(request.Language, request.ComplianceRegion);
 
             var builder = new StringBuilder();
-            await foreach (var delta in DraftSectionStreamAsync(instruction, hits, ct))
+            await foreach (var delta in DraftSectionStreamAsync(instruction, hits, request.Language, request.ComplianceRegion, ct))
             {
                 builder.Append(delta);
                 yield return new RfpStreamEvent
@@ -353,10 +361,11 @@ public class DocumentGeneratorService : IDocumentGeneratorService
             var instruction =
                 $"Write the \"{title}\" section of a proposal for \"{request.Solution}\". " +
                 extras +
-                "Base it only on the SOURCES.";
+                "Base it only on the SOURCES." +
+                GenerationContextSuffix(request.Language, request.ComplianceRegion);
 
             var builder = new StringBuilder();
-            await foreach (var delta in DraftSectionStreamAsync(instruction, hits, ct))
+            await foreach (var delta in DraftSectionStreamAsync(instruction, hits, request.Language, request.ComplianceRegion, ct))
             {
                 builder.Append(delta);
                 yield return new RfpStreamEvent
@@ -403,10 +412,149 @@ public class DocumentGeneratorService : IDocumentGeneratorService
         };
     }
 
-    private async Task<string> DraftSectionAsync(string instruction, List<SearchResultItem> hits, CancellationToken ct)
+    private static readonly string[] CompetitiveSectionTitles =
+    {
+        "Executive Positioning", "Where We Win", "Competitor Strengths to Acknowledge",
+        "Proof Points & References", "Recommended Talk Track"
+    };
+
+    public async Task<GeneratedDocument> GenerateCompetitivePositioningAsync(
+        CompetitivePositioningRequest request,
+        CancellationToken ct = default)
+    {
+        GeneratedDocument? document = null;
+        await foreach (var evt in GenerateCompetitivePositioningStreamAsync(request, ct))
+        {
+            if (evt.Type == "complete" && evt.Document is not null)
+            {
+                document = evt.Document;
+            }
+        }
+
+        return document ?? new GeneratedDocument
+        {
+            Title = $"Competitive positioning vs {request.Competitor}",
+            Sections = []
+        };
+    }
+
+    public async IAsyncEnumerable<RfpStreamEvent> GenerateCompetitivePositioningStreamAsync(
+        CompetitivePositioningRequest request,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var generationId = Guid.NewGuid();
+        var documentTitle = $"Competitive positioning — {request.OurSolution} vs {request.Competitor}";
+        var query =
+            $"competitive positioning battlecard against {request.Competitor} for {request.OurSolution}. " +
+            (request.CustomerContext ?? "");
+
+        var hits = await _vectorSearch.SearchAsync(
+            query,
+            request.UserObjectId,
+            topK: 10,
+            corpusSource: CorpusSources.Battlecards,
+            ct: ct);
+
+        // Fall back to Online if battlecards corpus is empty.
+        if (hits.Count == 0)
+        {
+            hits = await _vectorSearch.SearchAsync(
+                query,
+                request.UserObjectId,
+                topK: 10,
+                corpusSource: CorpusSources.Online,
+                ct: ct);
+        }
+
+        yield return new RfpStreamEvent
+        {
+            Type = "outline",
+            GenerationId = generationId,
+            DocumentTitle = documentTitle,
+            SectionTitles = CompetitiveSectionTitles.ToList()
+        };
+
+        var sections = new List<GeneratedSection>();
+        for (var i = 0; i < CompetitiveSectionTitles.Length; i++)
+        {
+            var title = CompetitiveSectionTitles[i];
+            var order = i + 1;
+            yield return new RfpStreamEvent
+            {
+                Type = "section-start",
+                GenerationId = generationId,
+                Order = order,
+                Title = title
+            };
+
+            var instruction =
+                $"Write the \"{title}\" section of a competitive positioning brief for \"{request.OurSolution}\" " +
+                $"against competitor \"{request.Competitor}\". " +
+                (string.IsNullOrWhiteSpace(request.CustomerContext)
+                    ? ""
+                    : $"Customer context: {request.CustomerContext}. ") +
+                "Ground claims only in SOURCES (battlecards). Be fair, factual, and sales-usable." +
+                GenerationContextSuffix(request.Language, request.ComplianceRegion);
+
+            var builder = new StringBuilder();
+            await foreach (var delta in DraftSectionStreamAsync(
+                               instruction, hits, request.Language, request.ComplianceRegion, ct))
+            {
+                builder.Append(delta);
+                yield return new RfpStreamEvent
+                {
+                    Type = "token",
+                    GenerationId = generationId,
+                    Order = order,
+                    Title = title,
+                    Delta = delta
+                };
+            }
+
+            var section = new GeneratedSection
+            {
+                Order = order,
+                Title = title,
+                Content = builder.ToString(),
+                Sources = hits.Select(h => h.Source).ToList()
+            };
+            sections.Add(section);
+
+            yield return new RfpStreamEvent
+            {
+                Type = "section-done",
+                GenerationId = generationId,
+                Order = order,
+                Title = title,
+                Content = section.Content,
+                Sources = section.Sources
+            };
+        }
+
+        yield return new RfpStreamEvent
+        {
+            Type = "complete",
+            GenerationId = generationId,
+            DocumentTitle = documentTitle,
+            Document = new GeneratedDocument
+            {
+                GenerationId = generationId,
+                Title = documentTitle,
+                Sections = sections,
+                Status = "Draft"
+            }
+        };
+    }
+
+    private async Task<string> DraftSectionAsync(
+        string instruction,
+        List<SearchResultItem> hits,
+        string? language,
+        string? complianceRegion,
+        CancellationToken ct)
     {
         var builder = new StringBuilder();
-        await foreach (var delta in DraftSectionStreamAsync(instruction, hits, ct))
+        await foreach (var delta in DraftSectionStreamAsync(instruction, hits, language, complianceRegion, ct))
         {
             builder.Append(delta);
         }
@@ -417,10 +565,14 @@ public class DocumentGeneratorService : IDocumentGeneratorService
     private async IAsyncEnumerable<string> DraftSectionStreamAsync(
         string instruction,
         List<SearchResultItem> hits,
+        string? language,
+        string? complianceRegion,
         [EnumeratorCancellation] CancellationToken ct)
     {
         var kernel = _kernelFactory.CreateKernel();
         var chat = kernel.GetRequiredService<IChatCompletionService>();
+        var pack = ResolveCompliancePack(complianceRegion);
+        var exportLanguage = string.IsNullOrWhiteSpace(language) ? pack.ExportLanguage : language!.Trim();
 
         var history = new ChatHistory(
             "You draft business-development documents grounded strictly in the SOURCES you are given. " +
@@ -428,7 +580,8 @@ public class DocumentGeneratorService : IDocumentGeneratorService
             "Prefer concrete reuse of prior proposal/business-case language when sources support it. " +
             "Flag any sentence that reuses wording from a source closely enough that it should be reviewed " +
             "before sending, by prefixing that sentence with [reused]. " +
-            "If sources are thin, write a short honest draft and call out gaps instead of fabricating.");
+            "If sources are thin, write a short honest draft and call out gaps instead of fabricating. " +
+            $"Write in {exportLanguage}. {pack.PromptSuffix}");
 
         var sourcesBlock = string.Join("\n\n", hits.Select((h, i) => $"[{i + 1}] {h.Source.FileName}\n{h.Excerpt}"));
         history.AddUserMessage($"{instruction}\n\nSOURCES:\n{sourcesBlock}");
@@ -452,4 +605,24 @@ public class DocumentGeneratorService : IDocumentGeneratorService
             ? ""
             : " Prioritize reusing or aligning with this focus material from Knowledge Search when relevant:\n" +
               focusNotes.Trim();
+
+    private string GenerationContextSuffix(string? language, string? complianceRegion)
+    {
+        var pack = ResolveCompliancePack(complianceRegion);
+        var lang = string.IsNullOrWhiteSpace(language) ? pack.ExportLanguage : language!.Trim();
+        return $" Output language: {lang}. Compliance pack ({pack.Label}): {pack.PromptSuffix}";
+    }
+
+    private ComplianceRegionPack ResolveCompliancePack(string? regionKey)
+    {
+        var key = string.IsNullOrWhiteSpace(regionKey) ? _compliance.DefaultRegion : regionKey.Trim();
+        if (_compliance.Regions.TryGetValue(key, out var pack))
+        {
+            return pack;
+        }
+
+        return _compliance.Regions.TryGetValue(_compliance.DefaultRegion, out var fallback)
+            ? fallback
+            : new ComplianceRegionPack { Label = key, ExportLanguage = "en-US" };
+    }
 }

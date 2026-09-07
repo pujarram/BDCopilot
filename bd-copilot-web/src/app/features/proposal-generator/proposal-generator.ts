@@ -40,6 +40,7 @@ export class ProposalGenerator implements OnInit, OnDestroy {
   protected readonly includeDeck = signal(true);
   protected readonly includeArchitectureDiagram = signal(true);
   protected readonly corpusSource = signal<CorpusSource>('Online');
+  protected readonly complianceRegion = signal('EU');
 
   protected readonly generating = signal(false);
   protected readonly streaming = signal(false);
@@ -287,7 +288,8 @@ export class ProposalGenerator implements OnInit, OnDestroy {
           includeDeck: this.includeDeck(),
           includeArchitectureDiagram: this.includeArchitectureDiagram(),
           userObjectId: this.teams.user().objectId,
-          corpusSource: this.corpusSource()
+          corpusSource: this.corpusSource(),
+          complianceRegion: this.complianceRegion()
         },
         signal
       );

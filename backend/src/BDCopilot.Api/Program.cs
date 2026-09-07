@@ -40,6 +40,7 @@ builder.Services.Configure<AdminUserSettings>(builder.Configuration.GetSection(A
 builder.Services.Configure<TeamsBotSettings>(builder.Configuration.GetSection(TeamsBotSettings.SectionName));
 builder.Services.Configure<LocalDocsSettings>(builder.Configuration.GetSection(LocalDocsSettings.SectionName));
 builder.Services.Configure<PlannerSyncSettings>(builder.Configuration.GetSection(PlannerSyncSettings.SectionName));
+builder.Services.Configure<CustomerRolloutSettings>(builder.Configuration.GetSection(CustomerRolloutSettings.SectionName));
 
 var aiSettings = builder.Configuration.GetSection(AiSettings.SectionName).Get<AiSettings>() ?? new AiSettings();
 var azureAd = builder.Configuration.GetSection(AzureAdSettings.SectionName).Get<AzureAdSettings>() ?? new AzureAdSettings();
@@ -125,6 +126,22 @@ builder.Services.AddScoped<IDocumentSyncService, DocumentSyncService>();
 builder.Services.AddScoped<ILocalDocumentSyncService, LocalDocumentSyncService>();
 builder.Services.AddScoped<IPlannerSyncService, PlannerSyncService>();
 builder.Services.AddScoped<IPlannerSnapshotService, PlannerSnapshotService>();
+builder.Services.AddScoped<IPlannerTaskIndexService, PlannerTaskIndexService>();
+builder.Services.AddScoped<IPlannerCapacityService, PlannerCapacityService>();
+builder.Services.AddScoped<IDeliveryCrossLinkService, DeliveryCrossLinkService>();
+builder.Services.AddScoped<IGraphUserDisplayNameService, GraphUserDisplayNameService>();
+builder.Services.AddScoped<ICapacityImportService, CapacityImportService>();
+builder.Services.AddScoped<IPartnerOnboardingService, PartnerOnboardingService>();
+builder.Services.Configure<CompliancePackSettings>(builder.Configuration.GetSection(CompliancePackSettings.SectionName));
+builder.Services.Configure<DynamicsSettings>(builder.Configuration.GetSection(DynamicsSettings.SectionName));
+builder.Services.Configure<LibraryStalenessSettings>(builder.Configuration.GetSection(LibraryStalenessSettings.SectionName));
+builder.Services.AddScoped<IOpportunityService, OpportunityService>();
+builder.Services.AddScoped<IMultiApprovalService, MultiApprovalService>();
+builder.Services.AddScoped<IDynamicsDealService, DynamicsDealService>();
+builder.Services.AddScoped<IRoiAnalyticsService, RoiAnalyticsService>();
+builder.Services.AddScoped<IBattlecardsSeedService, BattlecardsSeedService>();
+builder.Services.AddScoped<IGovernanceService, GovernanceService>();
+builder.Services.AddScoped<IPipelineCapacityService, PipelineCapacityService>();
 builder.Services.AddScoped<IProjectManagerService, ProjectManagerService>();
 builder.Services.AddScoped<IUnifiedIntelligenceService, UnifiedIntelligenceService>();
 builder.Services.AddScoped<IBlobStorageService, BlobStorageService>();
@@ -331,7 +348,159 @@ using (var scope = app.Services.CreateScope())
             );
             CREATE UNIQUE INDEX IF NOT EXISTS ix_planner_task_snapshots_date ON planner_task_snapshots (snapshot_date);
 
+            ALTER TABLE IF EXISTS planner_tasks ADD COLUMN IF NOT EXISTS estimated_hours double precision NOT NULL DEFAULT 8;
+
+            CREATE TABLE IF NOT EXISTS planner_task_daily_states (
+                id                  uuid PRIMARY KEY,
+                task_id             uuid NOT NULL REFERENCES planner_tasks (id) ON DELETE CASCADE,
+                snapshot_date       date NOT NULL,
+                percent_complete    int NOT NULL DEFAULT 0,
+                status              varchar(32) NOT NULL DEFAULT 'NotStarted'
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_planner_task_daily_states_task_date
+                ON planner_task_daily_states (task_id, snapshot_date);
+            CREATE INDEX IF NOT EXISTS ix_planner_task_daily_states_date ON planner_task_daily_states (snapshot_date);
+
+            CREATE TABLE IF NOT EXISTS delivery_cross_links (
+                id              uuid PRIMARY KEY,
+                task_id         uuid NOT NULL REFERENCES planner_tasks (id) ON DELETE CASCADE,
+                document_id     uuid NOT NULL REFERENCES documents (document_id) ON DELETE CASCADE,
+                link_kind       varchar(32) NOT NULL DEFAULT 'DeliveryDoc',
+                score           double precision NOT NULL DEFAULT 0,
+                locator         text,
+                excerpt         text,
+                rationale       text,
+                computed_at     timestamptz NOT NULL DEFAULT now(),
+                upvotes         int NOT NULL DEFAULT 0,
+                downvotes       int NOT NULL DEFAULT 0
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_delivery_cross_links_task_doc
+                ON delivery_cross_links (task_id, document_id);
+
+            CREATE TABLE IF NOT EXISTS planner_user_cache (
+                id              uuid PRIMARY KEY,
+                object_id       varchar(128) NOT NULL,
+                display_name    varchar(256) NOT NULL,
+                mail            varchar(256),
+                refreshed_at    timestamptz NOT NULL DEFAULT now()
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_planner_user_cache_object_id ON planner_user_cache (object_id);
+
+            CREATE TABLE IF NOT EXISTS planner_capacity_overrides (
+                id              uuid PRIMARY KEY,
+                assignee_key    varchar(256) NOT NULL,
+                week_start      date NOT NULL,
+                capacity_hours  double precision NOT NULL DEFAULT 40,
+                source          varchar(64) NOT NULL DEFAULT 'import',
+                imported_at     timestamptz NOT NULL DEFAULT now()
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_planner_capacity_overrides_key_week
+                ON planner_capacity_overrides (assignee_key, week_start);
+
+            CREATE TABLE IF NOT EXISTS opportunities (
+                id                      uuid PRIMARY KEY,
+                name                    varchar(512) NOT NULL,
+                client                  varchar(256) NOT NULL,
+                deal_size               numeric(18,2),
+                stage                   varchar(64) NOT NULL DEFAULT 'Lead',
+                owner_display_name      varchar(256),
+                owner_user_object_id    varchar(256),
+                deadline                timestamptz,
+                outcome                 varchar(32) NOT NULL DEFAULT 'Open',
+                outcome_notes           text,
+                dynamics_opportunity_id varchar(128),
+                notes                   text,
+                created_at              timestamptz NOT NULL DEFAULT now(),
+                updated_at              timestamptz
+            );
+
+            CREATE TABLE IF NOT EXISTS opportunity_document_links (
+                id                  uuid PRIMARY KEY,
+                opportunity_id      uuid NOT NULL REFERENCES opportunities (id) ON DELETE CASCADE,
+                generation_id       uuid,
+                rfp_document_id     uuid,
+                history_document_id uuid,
+                document_type       varchar(64) NOT NULL DEFAULT 'Rfp',
+                title               varchar(512),
+                linked_at           timestamptz NOT NULL DEFAULT now()
+            );
+
+            CREATE TABLE IF NOT EXISTS document_win_boosts (
+                id                      uuid PRIMARY KEY,
+                document_id             uuid NOT NULL REFERENCES documents (document_id) ON DELETE CASCADE,
+                source_rfp_document_id  uuid,
+                boost                   double precision NOT NULL DEFAULT 0.08,
+                created_at              timestamptz NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS ix_document_win_boosts_doc ON document_win_boosts (document_id);
+
+            CREATE TABLE IF NOT EXISTS generation_approvals (
+                id                      uuid PRIMARY KEY,
+                generation_id           uuid NOT NULL,
+                document_title          varchar(512) NOT NULL DEFAULT '',
+                role                    varchar(32) NOT NULL,
+                status                  varchar(32) NOT NULL DEFAULT 'Pending',
+                reviewer_user_object_id varchar(256),
+                reviewer_display_name   varchar(256),
+                notes                   text,
+                created_at              timestamptz NOT NULL DEFAULT now(),
+                decided_at              timestamptz
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_generation_approvals_gen_role
+                ON generation_approvals (generation_id, role);
+
+            ALTER TABLE IF EXISTS rfp_documents ADD COLUMN IF NOT EXISTS outcome varchar(16) NOT NULL DEFAULT 'Open';
+            ALTER TABLE IF EXISTS rfp_documents ADD COLUMN IF NOT EXISTS outcome_notes text;
+            ALTER TABLE IF EXISTS rfp_documents ADD COLUMN IF NOT EXISTS opportunity_id uuid;
+            ALTER TABLE IF EXISTS rfp_documents ADD COLUMN IF NOT EXISTS outcome_tagged_at timestamptz;
+
+            ALTER TABLE IF EXISTS documents ADD COLUMN IF NOT EXISTS tenant_id varchar(128);
+            ALTER TABLE IF EXISTS documents ADD COLUMN IF NOT EXISTS corpus_source varchar(32);
+
             ALTER TABLE IF EXISTS token_usage ADD COLUMN IF NOT EXISTS duration_ms int NOT NULL DEFAULT 0;
+
+            CREATE TABLE IF NOT EXISTS export_compliance_checklists (
+                id                          uuid PRIMARY KEY,
+                generation_id               uuid NOT NULL,
+                items_json                  text NOT NULL,
+                submitted_by_user_object_id varchar(256) NOT NULL,
+                submitted_by_display_name   varchar(256),
+                ready_for_export            boolean NOT NULL DEFAULT false,
+                submitted_at                timestamptz NOT NULL DEFAULT now()
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_export_compliance_checklists_gen
+                ON export_compliance_checklists (generation_id);
+
+            CREATE TABLE IF NOT EXISTS generation_snapshots (
+                id                          uuid PRIMARY KEY,
+                generation_id               uuid NOT NULL,
+                version_number              int NOT NULL,
+                document_title              varchar(512) NOT NULL,
+                sections_json               text NOT NULL,
+                created_by_user_object_id   varchar(256) NOT NULL,
+                created_by_display_name     varchar(256),
+                created_at                  timestamptz NOT NULL DEFAULT now(),
+                change_summary              text
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_generation_snapshots_gen_ver
+                ON generation_snapshots (generation_id, version_number);
+
+            CREATE TABLE IF NOT EXISTS governance_audit_events (
+                id                      uuid PRIMARY KEY,
+                generation_id           uuid,
+                user_object_id          varchar(256) NOT NULL,
+                user_display_name       varchar(256),
+                event_type              varchar(64) NOT NULL,
+                resource_type           varchar(64) NOT NULL,
+                resource_id             varchar(256),
+                outcome                 varchar(64),
+                detail                  text,
+                compliance_framework    varchar(64) NOT NULL DEFAULT 'SOC2-ISO27001',
+                created_at              timestamptz NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS ix_governance_audit_gen ON governance_audit_events (generation_id);
+            CREATE INDEX IF NOT EXISTS ix_governance_audit_type ON governance_audit_events (event_type);
+            CREATE INDEX IF NOT EXISTS ix_governance_audit_created ON governance_audit_events (created_at);
             """;
         await cmd.ExecuteNonQueryAsync();
     }
@@ -341,6 +510,15 @@ using (var scope = app.Services.CreateScope())
     if (graph.AllowDevSeedWithoutGraph)
     {
         await sync.SeedPilotDocumentsAsync();
+        try
+        {
+            await scope.ServiceProvider.GetRequiredService<IBattlecardsSeedService>().SeedAsync();
+        }
+        catch (Exception ex)
+        {
+            var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("BattlecardsStartup");
+            logger.LogWarning(ex, "Battlecards seed on startup failed.");
+        }
     }
 
     var localDocs = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<LocalDocsSettings>>().Value;

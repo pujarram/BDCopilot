@@ -42,7 +42,7 @@ export interface GeneratedDocument {
   createdAt: string;
 }
 
-export type CorpusSource = 'Local' | 'Online' | 'All';
+export type CorpusSource = 'Local' | 'Online' | 'Planner' | 'Battlecards' | 'All';
 
 export interface RfpGenerationRequest {
   title: string;
@@ -52,6 +52,8 @@ export interface RfpGenerationRequest {
   userObjectId: string;
   corpusSource?: CorpusSource;
   focusNotes?: string;
+  language?: string;
+  complianceRegion?: string;
 }
 
 /** Live SSE payload from POST /api/generate/rfp/stream */
@@ -102,6 +104,8 @@ export interface RfpDocumentListItem {
   createdAt: string;
   channelUploadStatus?: string | null;
   channelSharePointUrl?: string | null;
+  outcome?: string;
+  opportunityId?: string | null;
 }
 
 /** Persisted business-case / proposal (and generic) generation history row. */
@@ -152,6 +156,8 @@ export interface BusinessCaseGenerationRequest {
   userObjectId: string;
   corpusSource?: CorpusSource;
   focusNotes?: string;
+  language?: string;
+  complianceRegion?: string;
 }
 
 export interface ProposalGenerationRequest {
@@ -160,6 +166,8 @@ export interface ProposalGenerationRequest {
   includeArchitectureDiagram: boolean;
   userObjectId: string;
   corpusSource?: CorpusSource;
+  language?: string;
+  complianceRegion?: string;
 }
 
 export interface SearchResultItem {
@@ -177,6 +185,10 @@ export interface DocumentListItem {
   accessibleToCaller: boolean;
   indexStatus: string;
   corpusSource?: CorpusSource;
+  lastIndexedAt?: string | null;
+  isStale?: boolean;
+  monthsSinceModified?: number;
+  staleAfterMonths?: number;
 }
 
 export interface LocalDocsSyncResult {
@@ -249,6 +261,72 @@ export interface PlannerWorkloadRow {
   inProgress: number;
   delayed: number;
   avgPercentComplete: number;
+  estimatedHoursOpen: number;
+  estimatedFte: number;
+}
+
+export interface PlannerStalledAlert {
+  taskId: string;
+  graphTaskId: string;
+  title: string;
+  assignedUsers?: string | null;
+  percentComplete: number;
+  stalledDays: number;
+  lastProgressDate?: string | null;
+  message: string;
+}
+
+export interface PlannerCapacityCell {
+  assignee: string;
+  weekStart: string;
+  estimatedHours: number;
+  fteLoad: number;
+  openTasks: number;
+  heatLevel: string;
+}
+
+export interface PlannerCapacityHeatmap {
+  assignees: string[];
+  weekStarts: string[];
+  cells: PlannerCapacityCell[];
+  weeklyCapacityHours: number;
+  guidance: string;
+}
+
+export interface DeliveryCrossLink {
+  linkId?: string | null;
+  taskId: string;
+  taskTitle: string;
+  owner?: string | null;
+  isDelayed: boolean;
+  documentFileName: string;
+  locator?: string | null;
+  excerpt?: string | null;
+  score: number;
+  linkKind: string;
+  rationale: string;
+  upvotes?: number;
+  downvotes?: number;
+}
+
+export interface CrossLinkFeedbackRequest {
+  linkId: string;
+  userObjectId: string;
+  action: 'Upvote' | 'Downvote' | 'Dismiss' | 'Pin';
+}
+
+export interface CrossLinkFeedbackResult {
+  linkId: string;
+  upvotes: number;
+  downvotes: number;
+  adjustedScore: number;
+}
+
+export interface DeliveryCrossLinkResponse {
+  links: DeliveryCrossLink[];
+  delayedTaskCount: number;
+  rfpClauseHitCount: number;
+  summary: string;
 }
 
 export interface DelayPredictionItem {
@@ -262,6 +340,7 @@ export interface DelayPredictionItem {
   predictedSlipDays: number;
   riskLevel: string;
   rationale: string;
+  whyExplanation?: string;
 }
 
 export interface ModuleAtRiskItem {
@@ -280,6 +359,20 @@ export interface StaffingRecommendation {
   detail: string;
 }
 
+export interface ScoreFactor {
+  factor: string;
+  impactPoints: number;
+  direction: string;
+  detail: string;
+}
+
+export interface HealthScoreExplanation {
+  healthScore: number;
+  riskLevel: string;
+  factors: ScoreFactor[];
+  narrative: string;
+}
+
 export interface ProjectManagerInsight {
   healthScore: number;
   riskLevel: string;
@@ -288,6 +381,104 @@ export interface ProjectManagerInsight {
   delayPredictions: DelayPredictionItem[];
   modulesAtRisk: ModuleAtRiskItem[];
   staffingRecommendations: StaffingRecommendation[];
+  healthExplanation?: HealthScoreExplanation | null;
+}
+
+export interface PipelineStaffingGap {
+  assignee: string;
+  opportunityName: string;
+  client: string;
+  stage: string;
+  deadline?: string | null;
+  currentFteLoad: number;
+  gapLevel: string;
+  rationale: string;
+}
+
+export interface PipelineOpportunityRow {
+  opportunityId: string;
+  name: string;
+  client: string;
+  stage: string;
+  ownerDisplayName?: string | null;
+  deadline?: string | null;
+  daysToDeadline: number;
+  hasStaffingGap: boolean;
+}
+
+export interface PipelineCapacityView {
+  gaps: PipelineStaffingGap[];
+  openPursuits: PipelineOpportunityRow[];
+  summary: string;
+  guidance: string;
+}
+
+export interface ComplianceChecklistItem {
+  id: string;
+  label: string;
+  category: string;
+  required: boolean;
+  checked: boolean;
+  notes?: string | null;
+}
+
+export interface ExportComplianceChecklist {
+  generationId: string;
+  documentTitle: string;
+  items: ComplianceChecklistItem[];
+  allRequiredComplete: boolean;
+  guidance: string;
+}
+
+export interface ComplianceChecklistResult {
+  generationId: string;
+  readyForExport: boolean;
+  requiredChecked: number;
+  requiredTotal: number;
+  message: string;
+}
+
+export interface GenerationSnapshot {
+  id: string;
+  generationId: string;
+  versionNumber: number;
+  documentTitle: string;
+  sectionsJson: string;
+  createdByUserObjectId: string;
+  createdByDisplayName?: string | null;
+  createdAt: string;
+  changeSummary?: string | null;
+}
+
+export interface SectionDiffItem {
+  title: string;
+  changeKind: string;
+  beforeExcerpt?: string | null;
+  afterExcerpt?: string | null;
+  linesAdded: number;
+  linesRemoved: number;
+}
+
+export interface GenerationVersionDiff {
+  generationId: string;
+  fromVersion: number;
+  toVersion: number;
+  sections: SectionDiffItem[];
+  summary: string;
+}
+
+export interface GovernanceAuditEvent {
+  id?: string;
+  generationId?: string | null;
+  userObjectId: string;
+  userDisplayName?: string | null;
+  eventType: string;
+  resourceType: string;
+  resourceId?: string | null;
+  outcome?: string | null;
+  detail?: string | null;
+  complianceFramework?: string;
+  createdAt?: string;
 }
 
 export interface StakeholderWeeklyReport {
@@ -317,7 +508,11 @@ export interface UnifiedRelatedDocument {
   locator?: string | null;
   excerpt?: string | null;
   score: number;
+  matchedTaskId?: string | null;
   matchedTaskTitle?: string | null;
+  ownerDisplayName?: string | null;
+  linkKind?: string;
+  rationale?: string | null;
 }
 
 export interface UnifiedIntelligenceRequest {
@@ -411,21 +606,43 @@ export interface TenantCutoverItem {
   status: string;
   detail: string;
   action?: string | null;
+  goLiveRequired?: boolean;
+}
+
+export interface CustomerTenantProfile {
+  tenantId?: string | null;
+  plannerGroupIds: string[];
+  plannerPlanIds: string[];
+  pilotSitePath?: string | null;
+  pilotSiteId?: string | null;
+  sharePointSiteIds: string[];
+  syncFolderPaths: string[];
 }
 
 export interface TenantCutoverStatus {
   readyForProduction: boolean;
+  goLiveReady: boolean;
   completedCount: number;
   totalCount: number;
+  pendingItemIds: string[];
+  customerCode?: string | null;
+  customerDisplayName?: string | null;
+  customerProfilePath?: string | null;
+  sharePointConfigured: boolean;
+  sharePointSiteCount: number;
   keyVaultConfigured: boolean;
   keyVaultUri?: string | null;
   workbookImportPath: string;
   workbookImportScript: string;
+  cutoverScript?: string;
+  validateScript?: string;
   items: TenantCutoverItem[];
   plannerLive?: PlannerLiveStatus | null;
+  tenantProfile?: CustomerTenantProfile | null;
   accessDenialsLast24Hours: number;
   accessAuditsLast24Hours: number;
   aclVerificationGuidance: string;
+  goLiveGuidance: string;
 }
 
 export interface AuthConfig {
@@ -513,4 +730,181 @@ export interface ExportGenerationRequest {
 
 export interface ReindexRequest {
   siteId?: string | null;
+}
+
+export interface CapacityImportResult {
+  rowsProcessed: number;
+  overridesUpserted: number;
+  taskHoursUpdated: number;
+  skipped: number;
+  warnings: string[];
+  summary: string;
+}
+
+export interface PartnerOnboardingProfile {
+  code: string;
+  displayName: string;
+  tenantId: string;
+  subscriptionId?: string;
+  resourceGroup?: string;
+  keyVaultName?: string;
+  appServiceName?: string;
+  plannerGroupIds: string[];
+  pilotSitePath?: string;
+  graphAppId?: string;
+  apiAppId?: string;
+  spaAppId?: string;
+  teamsManifestBaseUrl?: string;
+  cutoverCompletedCount?: number;
+  cutoverTotalCount?: number;
+  goLiveReady?: boolean;
+}
+
+export interface ComplianceRegionPack {
+  label: string;
+  promptSuffix: string;
+  exportLanguage: string;
+}
+
+export interface CompliancePackSettings {
+  defaultRegion: string;
+  regions: Record<string, ComplianceRegionPack>;
+}
+
+export interface OpportunityDocumentLink {
+  id: string;
+  opportunityId: string;
+  generationId?: string | null;
+  rfpDocumentId?: string | null;
+  historyDocumentId?: string | null;
+  documentType: string;
+  title?: string | null;
+  linkedAt: string;
+}
+
+export interface Opportunity {
+  id: string;
+  name: string;
+  client: string;
+  dealSize?: number | null;
+  stage: string;
+  ownerDisplayName?: string | null;
+  ownerUserObjectId?: string | null;
+  deadline?: string | null;
+  outcome: string;
+  outcomeNotes?: string | null;
+  dynamicsOpportunityId?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  linkedDocuments: OpportunityDocumentLink[];
+}
+
+export interface CreateOpportunityRequest {
+  name: string;
+  client: string;
+  dealSize?: number | null;
+  stage?: string;
+  ownerDisplayName?: string;
+  ownerUserObjectId?: string;
+  deadline?: string | null;
+  notes?: string;
+  dynamicsOpportunityId?: string;
+}
+
+export interface TagWinLossRequest {
+  rfpDocumentId: string;
+  outcome: 'Win' | 'Loss' | 'Open';
+  notes?: string;
+  opportunityId?: string;
+  userObjectId: string;
+}
+
+export interface GenerationApproval {
+  id: string;
+  generationId: string;
+  documentTitle: string;
+  role: string;
+  status: string;
+  reviewerUserObjectId?: string | null;
+  reviewerDisplayName?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  decidedAt?: string | null;
+}
+
+export interface MultiApprovalStatus {
+  generationId: string;
+  documentTitle: string;
+  reviews: GenerationApproval[];
+  isFullyApproved: boolean;
+  isRejected: boolean;
+  overallStatus: string;
+}
+
+export interface CompetitivePositioningRequest {
+  competitor: string;
+  ourSolution: string;
+  customerContext?: string;
+  userObjectId: string;
+  language?: string;
+  complianceRegion?: string;
+  opportunityId?: string;
+}
+
+export interface DynamicsDealContext {
+  opportunityId: string;
+  name: string;
+  client: string;
+  estimatedValue?: number | null;
+  stage: string;
+  owner?: string | null;
+  closeDate?: string | null;
+  focusNotes: string;
+  fromDemoSeed: boolean;
+}
+
+export interface MonthlyGenerationPoint {
+  month: string;
+  count: number;
+}
+
+export interface WinRateTrendPoint {
+  month: string;
+  wins: number;
+  losses: number;
+  winRatePercent: number;
+}
+
+export interface RoiDashboardSummary {
+  minutesSavedPerDocument: number;
+  hoursSavedTotal: number;
+  generationsThisMonth: number;
+  generationsLast30Days: number;
+  generationsByMonth: MonthlyGenerationPoint[];
+  winRatePercent: number;
+  wins: number;
+  losses: number;
+  openOutcomes: number;
+  winRateTrend: WinRateTrendPoint[];
+  tokensLast30Days: number;
+  requestsLast30Days: number;
+  guidance: string;
+}
+
+export interface OperationUsageRow {
+  operation: string;
+  requestCount: number;
+  totalTokens: number;
+}
+
+export interface CustomerUsageSummary {
+  tokensLast30Days: number;
+  requestsLast30Days: number;
+  generationsLast30Days: number;
+  estimatedCostUsd: number;
+  costPer1kTokensUsd: number;
+  topConsumers: TeamTokenCostRow[];
+  byOperation: OperationUsageRow[];
+  guidance: string;
 }

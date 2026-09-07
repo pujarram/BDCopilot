@@ -16,6 +16,14 @@
       <input type="radio" name="ks-corpus" value="Online" [checked]="corpusSource() === 'Online'" (change)="corpusSource.set('Online')" />
       Online (SharePoint)
     </label>
+    <label class="corpus-radio">
+      <input type="radio" name="ks-corpus" value="Planner" [checked]="corpusSource() === 'Planner'" (change)="corpusSource.set('Planner')" />
+      Planner (tasks)
+    </label>
+    <label class="corpus-radio">
+      <input type="radio" name="ks-corpus" value="All" [checked]="corpusSource() === 'All'" (change)="corpusSource.set('All')" />
+      All corpora
+    </label>
   </div>
 </div>
 

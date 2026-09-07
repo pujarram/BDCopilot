@@ -51,6 +51,10 @@
   <button type="button" class="pi-tab" [class.is-active]="view() === 'gantt'" (click)="setView('gantt')">Gantt</button>
   <button type="button" class="pi-tab" [class.is-active]="view() === 'timeline'" (click)="setView('timeline')">Timeline</button>
   <button type="button" class="pi-tab" [class.is-active]="view() === 'workload'" (click)="setView('workload')">Workload</button>
+  <button type="button" class="pi-tab" [class.is-active]="view() === 'capacity'" (click)="setView('capacity')">Capacity</button>
+  <button type="button" class="pi-tab" [class.is-active]="view() === 'stalled'" (click)="setView('stalled')">Stalled</button>
+  <button type="button" class="pi-tab" [class.is-active]="view() === 'fusion'" (click)="setView('fusion')">Fusion</button>
+  <button type="button" class="pi-tab" [class.is-active]="view() === 'pipeline'" (click)="setView('pipeline')">Pipeline</button>
   <button type="button" class="pi-tab" [class.is-active]="view() === 'insights'" (click)="setView('insights')">AI PM</button>
   <button type="button" class="pi-tab" [class.is-active]="view() === 'burndown'" (click)="setView('burndown')">Burndown</button>
   <button type="button" class="pi-tab" [class.is-active]="view() === 'unified'" (click)="setView('unified')">Unified</button>
@@ -71,13 +75,23 @@
 
 @if (loading()) {
   <p style="color: var(--ink-muted); font-size: 13.5px;">Loading…</p>
-} @else if (tasks().length === 0 && view() !== 'workload' && view() !== 'insights' && view() !== 'burndown' && view() !== 'unified') {
+} @else if (tasks().length === 0 && view() !== 'workload' && view() !== 'capacity' && view() !== 'stalled' && view() !== 'fusion' && view() !== 'pipeline' && view() !== 'insights' && view() !== 'burndown' && view() !== 'unified') {
   <p style="color: var(--ink-muted); font-size: 13.5px;">
     No tasks yet — click <strong>Sync Planner</strong> (demo seed works without Graph Planner permissions).
   </p>
 } @else {
   @switch (view()) {
     @case ('overview') {
+      @if (stalledAlerts().length) {
+        <div class="pi-stalled-banner">
+          <strong>{{ stalledAlerts().length }} task(s) stalled 7+ days</strong>
+          <ul>
+            @for (a of stalledAlerts(); track a.taskId) {
+              <li>{{ a.title }} — {{ a.percentComplete }}% · {{ a.assignedUsers || 'Unassigned' }}</li>
+            }
+          </ul>
+        </div>
+      }
       <div class="table-wrap">
         <table>
           <thead>
@@ -204,10 +218,143 @@
                 <div><dt>Done</dt><dd>{{ w.completed }}</dd></div>
                 <div><dt>WIP</dt><dd>{{ w.inProgress }}</dd></div>
                 <div [class.is-warn]="w.delayed > 0"><dt>Delayed</dt><dd>{{ w.delayed }}</dd></div>
+                <div><dt>Open hours</dt><dd>{{ w.estimatedHoursOpen | number:'1.0-0' }}h</dd></div>
+                <div><dt>FTE load</dt><dd>{{ w.estimatedFte | number:'1.1-1' }}</dd></div>
               </dl>
             </article>
           }
         </div>
+      }
+    }
+
+    @case ('capacity') {
+      @if (capacity(); as cap) {
+        <p class="pi-muted">{{ cap.guidance }} · {{ cap.weeklyCapacityHours }}h/week baseline</p>
+        <div class="pi-heatmap-wrap">
+          <table class="pi-heatmap">
+            <thead>
+              <tr>
+                <th>Assignee</th>
+                @for (w of cap.weekStarts; track w) {
+                  <th>{{ formatWeek(w) }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (a of cap.assignees; track a) {
+                <tr>
+                  <th scope="row">{{ a }}</th>
+                  @for (w of cap.weekStarts; track w) {
+                    @if (capacityCell(a, w); as cell) {
+                      <td [class]="heatClass(cell.heatLevel)" [title]="cell.estimatedHours + 'h · ' + cell.fteLoad + ' FTE'">
+                        {{ cell.estimatedHours | number:'1.0-0' }}h
+                        <span class="pi-heat-fte">{{ cell.fteLoad | number:'1.1-1' }} FTE</span>
+                      </td>
+                    } @else {
+                      <td class="pi-heat--low">—</td>
+                    }
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <p class="pi-muted">Loading capacity heat map…</p>
+      }
+    }
+
+    @case ('stalled') {
+      @if (!stalledAlerts().length) {
+        <p class="pi-muted">No tasks with unchanged progress for 7+ days.</p>
+      } @else {
+        <ul class="pi-stalled-list">
+          @for (a of stalledAlerts(); track a.taskId) {
+            <li>
+              <strong>{{ a.title }}</strong>
+              <span>{{ a.message }}</span>
+            </li>
+          }
+        </ul>
+      }
+    }
+
+    @case ('fusion') {
+      @if (crossLinks(); as cl) {
+        <div class="pi-fusion-toolbar">
+          <p class="pi-muted">{{ cl.summary }}</p>
+          <fluent-button appearance="outline" (click)="refreshFusion()">Refresh links</fluent-button>
+        </div>
+        @if (!cl.links.length) {
+          <p class="pi-muted">No cross-links yet — delayed tasks will match RFP / delivery documents after sync.</p>
+        } @else {
+          <ul class="pi-fusion-list">
+            @for (l of cl.links; track l.linkId || (l.taskId + l.documentFileName)) {
+              <li>
+                <span class="pi-fusion-kind">{{ l.linkKind }}</span>
+                <strong>{{ l.taskTitle }}</strong>
+                ↔ {{ l.documentFileName }}
+                @if (l.locator) { <em>· {{ l.locator }}</em> }
+                <span class="pi-fusion-meta">
+                  Owner: {{ l.owner || 'Unassigned' }} · {{ (l.score * 100) | number:'1.0-0' }}%
+                  @if (l.upvotes || l.downvotes) {
+                    · 👍 {{ l.upvotes ?? 0 }} · 👎 {{ l.downvotes ?? 0 }}
+                  }
+                </span>
+                @if (l.excerpt) { <p class="pi-fusion-excerpt">{{ l.excerpt }}</p> }
+                @if (l.linkId) {
+                  <div class="pi-fusion-actions">
+                    <fluent-button appearance="outline" (click)="crossLinkFeedback(l.linkId!, 'Upvote')">Helpful</fluent-button>
+                    <fluent-button (click)="crossLinkFeedback(l.linkId!, 'Downvote')">Not relevant</fluent-button>
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+        }
+      } @else {
+        <p class="pi-muted">Loading delivery fusion cross-links…</p>
+      }
+    }
+
+    @case ('pipeline') {
+      @if (pipeline(); as p) {
+        <div class="pi-fusion-toolbar">
+          <p class="pi-muted">{{ p.summary }}</p>
+          <p class="pi-muted">{{ p.guidance }}</p>
+        </div>
+        @if (p.gaps.length) {
+          <section>
+            <h3>Staffing gaps</h3>
+            <ul class="pi-insights__list">
+              @for (g of p.gaps; track g.opportunityName + g.assignee) {
+                <li>
+                  <strong>[{{ g.gapLevel }}]</strong> {{ g.assignee }} — {{ g.opportunityName }} ({{ g.client }})
+                  <span> · {{ g.stage }} · {{ g.currentFteLoad | number:'1.0-0%' }} FTE</span>
+                  <p class="pi-muted">{{ g.rationale }}</p>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+        <section>
+          <h3>Open pursuits</h3>
+          @if (!p.openPursuits.length) {
+            <p class="pi-muted">No open pursuits — add opportunities on /pursuits.</p>
+          } @else {
+            <ul class="pi-insights__list">
+              @for (o of p.openPursuits; track o.opportunityId) {
+                <li>
+                  <strong>{{ o.name }}</strong> ({{ o.client }}) — {{ o.stage }}
+                  @if (o.hasStaffingGap) { <span class="pi-fusion-kind">Gap</span> }
+                  @if (o.deadline) { <span> · {{ o.daysToDeadline }}d to deadline</span> }
+                </li>
+              }
+            </ul>
+          }
+        </section>
+      } @else {
+        <p class="pi-muted">Loading capacity vs pipeline…</p>
       }
     }
 
@@ -226,6 +373,22 @@
             <p>{{ i.summary }}</p>
           </div>
 
+          @if (i.healthExplanation; as hx) {
+            <section>
+              <h3>Why this health score?</h3>
+              <p class="pi-muted">{{ hx.narrative }}</p>
+              <ul class="pi-insights__list">
+                @for (f of hx.factors; track f.factor) {
+                  <li>
+                    <strong>{{ f.factor }}</strong>
+                    ({{ f.direction === 'negative' ? '−' : f.direction === 'positive' ? '+' : '' }}{{ f.impactPoints }} pts)
+                    — {{ f.detail }}
+                  </li>
+                }
+              </ul>
+            </section>
+          }
+
           <section>
             <h3>Delay predictions</h3>
             @if (!i.delayPredictions.length) {
@@ -236,6 +399,9 @@
                   <li>
                     <strong>[{{ p.riskLevel }}]</strong> {{ p.title }}
                     <span> — ≈{{ p.predictedSlipDays }}d · {{ p.rationale }}</span>
+                    @if (p.whyExplanation) {
+                      <p class="pi-muted" style="margin:4px 0 0;">Why: {{ p.whyExplanation }}</p>
+                    }
                   </li>
                 }
               </ul>
@@ -325,10 +491,14 @@
             <p><strong>Health {{ u.healthScore }}/100</strong> · Risk {{ u.riskLevel }}</p>
             <pre class="pi-insights__md">{{ u.managementSummary }}</pre>
             @if (u.relatedDocuments.length) {
-              <h4>Related documents</h4>
+              <h4>Cross-links (delayed ↔ RFP clauses ↔ owners)</h4>
               <ul class="pi-insights__list">
                 @for (d of u.relatedDocuments; track d.fileName + (d.matchedTaskTitle || '')) {
-                  <li>{{ d.fileName }} — for <em>{{ d.matchedTaskTitle }}</em></li>
+                  <li>
+                    <strong>{{ d.matchedTaskTitle }}</strong> ↔ {{ d.fileName }}
+                    @if (d.linkKind) { [{{ d.linkKind }}] }
+                    — {{ d.ownerDisplayName || 'Unassigned' }}
+                  </li>
                 }
               </ul>
             }

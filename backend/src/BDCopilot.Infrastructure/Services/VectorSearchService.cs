@@ -44,7 +44,9 @@ public class VectorSearchService : IVectorSearchService
         chunks = source switch
         {
             CorpusSources.Local => chunks.Where(c => c.Document!.GraphDriveId == CorpusSources.LocalDriveId),
-            CorpusSources.Online => chunks.Where(c => c.Document!.GraphDriveId != CorpusSources.LocalDriveId),
+            CorpusSources.Online => chunks.Where(c => CorpusSources.IsOnlineDocument(c.Document!)),
+            CorpusSources.Planner => chunks.Where(c => c.Document!.GraphDriveId == CorpusSources.PlannerDriveId),
+            CorpusSources.Battlecards => chunks.Where(c => c.Document!.GraphDriveId == CorpusSources.BattlecardsDriveId),
             _ => chunks
         };
 
@@ -63,8 +65,26 @@ public class VectorSearchService : IVectorSearchService
         var accessibleIds = await _accessControl.FilterAccessibleDocumentIdsAsync(
             userObjectId, candidates.Select(c => c.Chunk.DocumentId).Distinct(), ct);
 
+        var boostRows = await _db.DocumentWinBoosts.AsNoTracking()
+            .Where(b => accessibleIds.Contains(b.DocumentId))
+            .ToListAsync(ct);
+        var boostByDoc = boostRows
+            .GroupBy(b => b.DocumentId)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Boost));
+
         return candidates
             .Where(c => accessibleIds.Contains(c.Chunk.DocumentId))
+            .Select(c =>
+            {
+                var baseScore = 1 - c.Distance;
+                boostByDoc.TryGetValue(c.Chunk.DocumentId, out var boost);
+                return new
+                {
+                    c.Chunk,
+                    Score = Math.Min(1.0, baseScore + boost)
+                };
+            })
+            .OrderByDescending(c => c.Score)
             .Take(topK)
             .Select(c => new SearchResultItem
             {
@@ -77,8 +97,7 @@ public class VectorSearchService : IVectorSearchService
                     Snippet = Truncate(c.Chunk.Content, 220)
                 },
                 Excerpt = Truncate(c.Chunk.Content, 400),
-                // Cosine distance (0 = identical) -> a 0..1 similarity score that reads better in a UI.
-                Score = Math.Round(1 - c.Distance, 4)
+                Score = Math.Round(c.Score, 4)
             })
             .ToList();
     }

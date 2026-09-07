@@ -113,7 +113,7 @@ public class AccessControlService : IAccessControlService
     private async Task<bool> EvaluateAccessAsync(string userObjectId, Document doc, CancellationToken ct)
     {
         // Local disk corpus is readable by any authenticated app user (dev machine / shared docs folder).
-        if (CorpusSources.IsLocalDocument(doc))
+        if (CorpusSources.IsLocalDocument(doc) || CorpusSources.IsPlannerDocument(doc))
         {
             return true;
         }

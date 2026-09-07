@@ -7,6 +7,8 @@ public interface IPlannerSnapshotService
     Task CaptureDailySnapshotAsync(CancellationToken ct = default);
 
     Task<List<PlannerBurndownPoint>> GetBurndownAsync(int days = 30, CancellationToken ct = default);
+
+    Task<List<PlannerStalledAlert>> GetStalledAlertsAsync(int days = 7, CancellationToken ct = default);
 }
 
 public interface IUnifiedIntelligenceService

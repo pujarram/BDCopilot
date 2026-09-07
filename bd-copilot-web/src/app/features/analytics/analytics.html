@@ -1,0 +1,109 @@
+<div class="panel-head">
+  <div>
+    <h2>ROI &amp; customer usage</h2>
+    <p>Time saved, generations per month, win-rate trend, and a customer-facing AI cost view (alongside App Insights).</p>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="error-banner">{{ errorMessage() }}</div>
+}
+
+@if (loading()) {
+  <p class="pi-muted">Loading analytics…</p>
+} @else {
+  @if (roi(); as r) {
+    <section class="admin-console__telemetry">
+      <h3>ROI dashboard</h3>
+      <div class="dash__kpis">
+        <article class="dash-kpi">
+          <span class="dash-kpi__label">Hours saved (30d)</span>
+          <strong>{{ r.hoursSavedTotal | number:'1.0-1' }}</strong>
+        </article>
+        <article class="dash-kpi">
+          <span class="dash-kpi__label">Gens this month</span>
+          <strong>{{ r.generationsThisMonth | number }}</strong>
+        </article>
+        <article class="dash-kpi">
+          <span class="dash-kpi__label">Win rate</span>
+          <strong>{{ r.winRatePercent | number:'1.0-1' }}%</strong>
+        </article>
+        <article class="dash-kpi">
+          <span class="dash-kpi__label">W / L / Open</span>
+          <strong>{{ r.wins }} / {{ r.losses }} / {{ r.openOutcomes }}</strong>
+        </article>
+      </div>
+      <p class="dash__muted">{{ r.guidance }}</p>
+
+      <h4>Generations by month</h4>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Month</th><th>Count</th></tr></thead>
+          <tbody>
+            @for (p of r.generationsByMonth; track p.month) {
+              <tr><td>{{ p.month }}</td><td>{{ p.count }}</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <h4 style="margin-top:1rem;">Win-rate trend</h4>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Month</th><th>Wins</th><th>Losses</th><th>Win %</th></tr></thead>
+          <tbody>
+            @for (p of r.winRateTrend; track p.month) {
+              <tr>
+                <td>{{ p.month }}</td>
+                <td>{{ p.wins }}</td>
+                <td>{{ p.losses }}</td>
+                <td>{{ p.winRatePercent | number:'1.0-1' }}%</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  @if (usage(); as u) {
+    <section class="admin-console__telemetry" style="margin-top:1.5rem;">
+      <h3>Customer AI usage &amp; cost (30d)</h3>
+      <div class="dash__kpis">
+        <article class="dash-kpi">
+          <span class="dash-kpi__label">Tokens</span>
+          <strong>{{ u.tokensLast30Days | number }}</strong>
+        </article>
+        <article class="dash-kpi">
+          <span class="dash-kpi__label">Requests</span>
+          <strong>{{ u.requestsLast30Days | number }}</strong>
+        </article>
+        <article class="dash-kpi">
+          <span class="dash-kpi__label">Generations</span>
+          <strong>{{ u.generationsLast30Days | number }}</strong>
+        </article>
+        <article class="dash-kpi">
+          <span class="dash-kpi__label">Est. cost (USD)</span>
+          <strong>{{ u.estimatedCostUsd | number:'1.2-2' }}</strong>
+        </article>
+      </div>
+      <p class="dash__muted">{{ u.guidance }}</p>
+      @if (u.byOperation.length) {
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Operation</th><th>Requests</th><th>Tokens</th></tr></thead>
+            <tbody>
+              @for (row of u.byOperation; track row.operation) {
+                <tr>
+                  <td>{{ row.operation }}</td>
+                  <td>{{ row.requestCount | number }}</td>
+                  <td>{{ row.totalTokens | number }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+}

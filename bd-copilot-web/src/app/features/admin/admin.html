@@ -8,6 +8,7 @@
     </div>
     <div class="admin-console__actions">
       <a routerLink="/dashboard"><fluent-button appearance="outline">Dashboard</fluent-button></a>
+      <a routerLink="/admin/onboard"><fluent-button appearance="outline">Onboarding wizard</fluent-button></a>
       <fluent-button [attr.disabled]="reindexBusy() ? true : null" (click)="reindex()">
         {{ reindexBusy() ? 'Reindexing…' : 'Reindex corpus' }}
       </fluent-button>
@@ -26,21 +27,33 @@
     <p class="dash__muted">Loading admin console…</p>
   } @else {
     @if (cutover(); as c) {
-      <section class="admin-console__cutover" [class.is-ready]="c.readyForProduction">
+      <section class="admin-console__cutover"
+               [class.is-ready]="c.goLiveReady"
+               [class.is-core-ready]="c.readyForProduction && !c.goLiveReady">
         <div class="admin-console__cutover-head">
           <h3>Tenant cutover</h3>
           <span class="admin-console__cutover-badge">
             {{ c.completedCount }}/{{ c.totalCount }}
-            {{ c.readyForProduction ? '· Ready' : '· In progress' }}
+            {{ c.goLiveReady ? '· Go-live ready' : (c.readyForProduction ? '· Core ready' : '· In progress') }}
           </span>
         </div>
+        @if (c.customerDisplayName) {
+          <p class="dash__muted">Customer: <strong>{{ c.customerDisplayName }}</strong>
+            @if (c.customerCode) { (<code class="mono">{{ c.customerCode }}</code>) }
+          </p>
+        }
         @if (c.keyVaultUri) {
           <p class="dash__muted">Key Vault: <code class="mono">{{ c.keyVaultUri }}</code></p>
         }
+        <p class="dash__muted">{{ c.goLiveGuidance }}</p>
         <ul class="dash-checklist admin-console__cutover-list">
           @for (item of c.items; track item.id) {
-            <li [class.is-ok]="item.complete">
+            <li [class.is-ok]="item.complete"
+                [class.is-optional]="item.goLiveRequired === false">
               <strong>{{ item.label }}</strong>
+              @if (item.goLiveRequired === false) {
+                <span class="admin-console__cutover-tag">post go-live</span>
+              }
               <span>{{ item.detail }}</span>
               @if (item.action) {
                 <code class="mono admin-console__cutover-action">{{ item.action }}</code>
@@ -48,10 +61,38 @@
             </li>
           }
         </ul>
+        @if (c.tenantProfile; as tp) {
+          <details class="admin-console__tenant-profile">
+            <summary>Customer tenant ids (Planner · SharePoint)</summary>
+            <dl>
+              <dt>Tenant ID</dt><dd><code class="mono">{{ tp.tenantId || '—' }}</code></dd>
+              <dt>Planner GroupIds</dt>
+              <dd>
+                @if (tp.plannerGroupIds.length) {
+                  @for (id of tp.plannerGroupIds; track id) { <code class="mono">{{ id }}</code> }
+                } @else { — }
+              </dd>
+              <dt>Planner PlanIds</dt>
+              <dd>
+                @if (tp.plannerPlanIds.length) {
+                  @for (id of tp.plannerPlanIds; track id) { <code class="mono">{{ id }}</code> }
+                } @else { — }
+              </dd>
+              <dt>Pilot site path</dt><dd><code class="mono">{{ tp.pilotSitePath || '—' }}</code></dd>
+              <dt>Pilot site ID</dt><dd><code class="mono">{{ tp.pilotSiteId || '—' }}</code></dd>
+              <dt>SharePoint site IDs</dt>
+              <dd>
+                @if (tp.sharePointSiteIds.length) {
+                  @for (id of tp.sharePointSiteIds; track id) { <code class="mono">{{ id }}</code> }
+                } @else { — }
+              </dd>
+            </dl>
+          </details>
+        }
         <p class="dash__muted">{{ c.aclVerificationGuidance }}</p>
         <p class="dash__muted">
-          Workbook: <code class="mono">{{ c.workbookImportPath }}</code> ·
-          run <code class="mono">{{ c.workbookImportScript }}</code>
+          Validate: <code class="mono">{{ c.validateScript || 'docs/azure/Test-CutoverChecklist.ps1' }}</code> ·
+          Cutover: <code class="mono">{{ c.cutoverScript || 'docs/azure/Invoke-CustomerCutover.ps1' }}</code>
         </p>
       </section>
     }
@@ -175,6 +216,18 @@
         }
       </section>
     </div>
+
+    <section class="admin-console__capacity">
+      <h3>Capacity import (HR / Excel CSV)</h3>
+      <p class="dash__muted">Columns: Assignee, WeekStart, CapacityHours — optional TaskTitle, EstimatedHours.</p>
+      <label class="admin-console__file">
+        <input type="file" accept=".csv,text/csv" [disabled]="capacityImportBusy()" (change)="importCapacity($event)" />
+        {{ capacityImportBusy() ? 'Importing…' : 'Choose CSV file' }}
+      </label>
+      @if (capacityImportResult()) {
+        <p class="dash__muted">{{ capacityImportResult() }}</p>
+      }
+    </section>
 
     @if (goldenEvalResult()) {
       <section>

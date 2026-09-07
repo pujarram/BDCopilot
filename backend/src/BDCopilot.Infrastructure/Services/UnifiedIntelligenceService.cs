@@ -7,9 +7,12 @@ namespace BDCopilot.Infrastructure.Services;
 
 public sealed class UnifiedIntelligenceService : IUnifiedIntelligenceService
 {
+    private static readonly string[] RfpNameTokens = ["rfp", "proposal", "bid", "pursuit", "commercial"];
+
     private readonly IPlannerSyncService _planner;
     private readonly IProjectManagerService _projectManager;
     private readonly IVectorSearchService _search;
+    private readonly IDeliveryCrossLinkService _crossLinks;
     private readonly IAiChatService _chat;
     private readonly ILogger<UnifiedIntelligenceService> _logger;
 
@@ -17,12 +20,14 @@ public sealed class UnifiedIntelligenceService : IUnifiedIntelligenceService
         IPlannerSyncService planner,
         IProjectManagerService projectManager,
         IVectorSearchService search,
+        IDeliveryCrossLinkService crossLinks,
         IAiChatService chat,
         ILogger<UnifiedIntelligenceService> logger)
     {
         _planner = planner;
         _projectManager = projectManager;
         _search = search;
+        _crossLinks = crossLinks;
         _chat = chat;
         _logger = logger;
     }
@@ -39,7 +44,24 @@ public sealed class UnifiedIntelligenceService : IUnifiedIntelligenceService
         var related = new List<UnifiedRelatedDocument>();
         if (request.IncludeSharePoint && delayed.Count > 0)
         {
-            related = await FindRelatedDocumentsAsync(delayed, request.UserObjectId, ct);
+            var crossLinkResponse = await _crossLinks.GetCrossLinksAsync(request.UserObjectId, maxTasks: 8, refresh: false, ct);
+            related = crossLinkResponse.Links.Select(l => new UnifiedRelatedDocument
+            {
+                FileName = l.DocumentFileName,
+                Locator = l.Locator,
+                Excerpt = l.Excerpt,
+                Score = l.Score,
+                MatchedTaskId = l.TaskId,
+                MatchedTaskTitle = l.TaskTitle,
+                OwnerDisplayName = l.Owner,
+                LinkKind = l.LinkKind,
+                Rationale = l.Rationale
+            }).ToList();
+
+            if (related.Count == 0)
+            {
+                related = await FindRelatedDocumentsAsync(delayed, request.UserObjectId, ct);
+            }
         }
 
         var summary = BuildDeterministicSummary(request.Query, insight, delayed, related);
@@ -53,7 +75,7 @@ public sealed class UnifiedIntelligenceService : IUnifiedIntelligenceService
             {
                 var context = BuildLlmContext(insight, delayed, related);
                 var question = string.IsNullOrWhiteSpace(request.Query)
-                    ? "Write a unified management brief: delayed work, related documents, owners, and recommended actions."
+                    ? "Write a unified management brief: delayed work, related RFP clauses, owners, and recommended actions."
                     : request.Query!;
 
                 var reply = await _chat.AskAsync(new ChatRequest
@@ -110,7 +132,7 @@ public sealed class UnifiedIntelligenceService : IUnifiedIntelligenceService
             List<SearchResultItem> hits;
             try
             {
-                hits = await _search.SearchAsync(query, userObjectId, topK: 3, ct: ct);
+                hits = await _search.SearchAsync(query, userObjectId, topK: 3, CorpusSources.Online, ct);
             }
             catch (Exception ex)
             {
@@ -123,13 +145,20 @@ public sealed class UnifiedIntelligenceService : IUnifiedIntelligenceService
                 var key = hit.Source.FileName + "|" + (hit.Source.Locator ?? "");
                 if (!seen.Add(key)) continue;
 
+                var kind = ClassifyLinkKind(hit.Source.FileName, hit.Excerpt);
                 results.Add(new UnifiedRelatedDocument
                 {
                     FileName = hit.Source.FileName,
                     Locator = hit.Source.Locator,
                     Excerpt = hit.Excerpt,
                     Score = hit.Score,
-                    MatchedTaskTitle = task.Title
+                    MatchedTaskId = task.Id,
+                    MatchedTaskTitle = task.Title,
+                    OwnerDisplayName = task.AssignedUsers ?? "Unassigned",
+                    LinkKind = kind,
+                    Rationale = kind == "RfpClause"
+                        ? $"Delayed task ↔ winning RFP clause ({task.AssignedUsers ?? "Unassigned"})"
+                        : $"Delayed task ↔ delivery doc ({task.AssignedUsers ?? "Unassigned"})"
                 });
             }
         }
@@ -137,11 +166,16 @@ public sealed class UnifiedIntelligenceService : IUnifiedIntelligenceService
         return results.OrderByDescending(r => r.Score).Take(12).ToList();
     }
 
+    private static string ClassifyLinkKind(string fileName, string? excerpt)
+    {
+        var text = (fileName + " " + (excerpt ?? "")).ToLowerInvariant();
+        return RfpNameTokens.Any(t => text.Contains(t, StringComparison.Ordinal)) ? "RfpClause" : "DeliveryDoc";
+    }
+
     private static string BuildSearchQuery(PlannerTaskListItem task)
     {
         var title = task.Title.Trim();
         if (title.Length < 4) return title;
-        // Drop generic planner words; keep module-ish tokens
         var tokens = title
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(w => w.Length > 3 && !w.Equals("task", StringComparison.OrdinalIgnoreCase))
@@ -163,9 +197,10 @@ public sealed class UnifiedIntelligenceService : IUnifiedIntelligenceService
             sb.AppendLine();
         }
 
+        var rfpLinks = related.Count(r => r.LinkKind == "RfpClause");
         sb.AppendLine(
             $"Health **{insight.HealthScore}/100** ({insight.RiskLevel}). " +
-            $"{delayed.Count} delayed task(s), {related.Count} related document hit(s).");
+            $"{delayed.Count} delayed task(s), {related.Count} cross-link(s) ({rfpLinks} RFP clause match(es)).");
         sb.AppendLine();
 
         if (delayed.Count > 0)
@@ -181,10 +216,10 @@ public sealed class UnifiedIntelligenceService : IUnifiedIntelligenceService
 
         if (related.Count > 0)
         {
-            sb.AppendLine("**Related SharePoint / library docs**");
+            sb.AppendLine("**Cross-links: delayed work ↔ RFP / delivery docs**");
             foreach (var d in related.Take(6))
             {
-                sb.AppendLine($"• {d.FileName} (for: {d.MatchedTaskTitle})");
+                sb.AppendLine($"• {d.MatchedTaskTitle} ↔ {d.FileName} [{d.LinkKind}] — {d.OwnerDisplayName}");
             }
 
             sb.AppendLine();
@@ -215,10 +250,10 @@ public sealed class UnifiedIntelligenceService : IUnifiedIntelligenceService
             sb.AppendLine($"- {t.Title} | owner={t.AssignedUsers} | due={t.DueDate:yyyy-MM-dd} | {t.PercentComplete}%");
         }
 
-        sb.AppendLine("Related docs:");
+        sb.AppendLine("Cross-links (delayed ↔ RFP clauses ↔ owners):");
         foreach (var d in related.Take(10))
         {
-            sb.AppendLine($"- {d.FileName} | task={d.MatchedTaskTitle} | score={d.Score:0.###}");
+            sb.AppendLine($"- task={d.MatchedTaskTitle} | owner={d.OwnerDisplayName} | doc={d.FileName} | kind={d.LinkKind} | score={d.Score:0.###}");
             if (!string.IsNullOrWhiteSpace(d.Excerpt))
             {
                 sb.AppendLine($"  {d.Excerpt[..Math.Min(d.Excerpt.Length, 160)]}");

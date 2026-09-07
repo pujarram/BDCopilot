@@ -33,6 +33,22 @@ import {
   UnifiedIntelligenceRequest,
   UnifiedIntelligenceResponse,
   PlannerBurndownPoint,
+  PlannerCapacityHeatmap,
+  PlannerStalledAlert,
+  DeliveryCrossLinkResponse,
+  CrossLinkFeedbackRequest,
+  CrossLinkFeedbackResult,
+  CapacityImportResult,
+  PartnerOnboardingProfile,
+  CompliancePackSettings,
+  Opportunity,
+  CreateOpportunityRequest,
+  TagWinLossRequest,
+  MultiApprovalStatus,
+  CompetitivePositioningRequest,
+  DynamicsDealContext,
+  RoiDashboardSummary,
+  CustomerUsageSummary,
   RfpStreamEvent,
   AdminLoginResponse,
   AdminTelemetrySummary,
@@ -42,7 +58,14 @@ import {
   SearchResultItem,
   SyncHealthStatus,
   TeamTokenCostRow,
-  CorpusSource
+  CorpusSource,
+  ComplianceChecklistItem,
+  ExportComplianceChecklist,
+  ComplianceChecklistResult,
+  GenerationSnapshot,
+  GenerationVersionDiff,
+  GovernanceAuditEvent,
+  PipelineCapacityView
 } from '../models/api-models';
 
 /**
@@ -328,6 +351,125 @@ export class ApiService {
     return this.http.post<PlannerSyncResult>(`${this.baseUrl}/planner/sync`, {});
   }
 
+  getPlannerCapacity(weeks = 6): Observable<PlannerCapacityHeatmap> {
+    return this.http.get<PlannerCapacityHeatmap>(`${this.baseUrl}/planner/capacity`, {
+      params: { weeks: weeks.toString() }
+    });
+  }
+
+  getPlannerStalledAlerts(days = 7): Observable<PlannerStalledAlert[]> {
+    return this.http.get<PlannerStalledAlert[]>(`${this.baseUrl}/planner/alerts/stalled`, {
+      params: { days: days.toString() }
+    });
+  }
+
+  getDeliveryCrossLinks(userObjectId: string, maxTasks = 8, refresh = false): Observable<DeliveryCrossLinkResponse> {
+    return this.http.get<DeliveryCrossLinkResponse>(`${this.baseUrl}/planner/cross-links`, {
+      params: { userObjectId, maxTasks: maxTasks.toString(), refresh: String(refresh) }
+    });
+  }
+
+  submitCrossLinkFeedback(body: CrossLinkFeedbackRequest): Observable<CrossLinkFeedbackResult> {
+    return this.http.post<CrossLinkFeedbackResult>(`${this.baseUrl}/planner/cross-links/feedback`, body);
+  }
+
+  importCapacityCsv(file: File): Observable<CapacityImportResult> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.post<CapacityImportResult>(`${this.baseUrl}/admin/capacity/import`, form);
+  }
+
+  getOnboardingProfile(): Observable<PartnerOnboardingProfile> {
+    return this.http.get<PartnerOnboardingProfile>(`${this.baseUrl}/admin/onboarding`);
+  }
+
+  saveOnboardingProfile(profile: PartnerOnboardingProfile): Observable<PartnerOnboardingProfile> {
+    return this.http.post<PartnerOnboardingProfile>(`${this.baseUrl}/admin/onboarding`, profile);
+  }
+
+  downloadTeamsManifest(): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/admin/onboarding/teams-manifest`, { responseType: 'blob' });
+  }
+
+  getCompliancePacks(): Observable<CompliancePackSettings> {
+    return this.http.get<CompliancePackSettings>(`${this.baseUrl}/generate/compliance-packs`);
+  }
+
+  listOpportunities(): Observable<Opportunity[]> {
+    return this.http.get<Opportunity[]>(`${this.baseUrl}/opportunities`);
+  }
+
+  createOpportunity(body: CreateOpportunityRequest): Observable<Opportunity> {
+    return this.http.post<Opportunity>(`${this.baseUrl}/opportunities`, body);
+  }
+
+  updateOpportunity(id: string, body: Partial<CreateOpportunityRequest> & { outcome?: string; outcomeNotes?: string }): Observable<Opportunity> {
+    return this.http.put<Opportunity>(`${this.baseUrl}/opportunities/${id}`, body);
+  }
+
+  linkOpportunityDocument(body: {
+    opportunityId: string;
+    generationId?: string;
+    rfpDocumentId?: string;
+    documentType?: string;
+    title?: string;
+  }): Observable<unknown> {
+    return this.http.post(`${this.baseUrl}/opportunities/link-document`, body);
+  }
+
+  tagWinLoss(body: TagWinLossRequest): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/opportunities/win-loss`, body);
+  }
+
+  startMultiApproval(body: { generationId: string; documentTitle: string; userObjectId: string }): Observable<MultiApprovalStatus> {
+    return this.http.post<MultiApprovalStatus>(`${this.baseUrl}/generate/approvals/start`, body);
+  }
+
+  decideApproval(body: {
+    generationId: string;
+    role: string;
+    status: string;
+    userObjectId: string;
+    displayName?: string;
+    notes?: string;
+  }): Observable<MultiApprovalStatus> {
+    return this.http.post<MultiApprovalStatus>(`${this.baseUrl}/generate/approvals/decide`, body);
+  }
+
+  getMultiApproval(generationId: string): Observable<MultiApprovalStatus> {
+    return this.http.get<MultiApprovalStatus>(`${this.baseUrl}/generate/approvals/${generationId}`);
+  }
+
+  generateCompetitive(request: CompetitivePositioningRequest): Observable<GeneratedDocument> {
+    return this.http.post<GeneratedDocument>(`${this.baseUrl}/generate/competitive`, request);
+  }
+
+  async *generateCompetitiveStream(
+    request: CompetitivePositioningRequest,
+    signal?: AbortSignal
+  ): AsyncGenerator<RfpStreamEvent, void, unknown> {
+    yield* this.readSseStream(`${this.baseUrl}/generate/competitive/stream`, request, signal, 'Competitive stream');
+  }
+
+  listDynamicsDeals(): Observable<DynamicsDealContext[]> {
+    return this.http.get<DynamicsDealContext[]>(`${this.baseUrl}/dynamics/deals`);
+  }
+
+  getDynamicsDealContext(opportunityId?: string, client?: string): Observable<DynamicsDealContext> {
+    const params: Record<string, string> = {};
+    if (opportunityId) params['opportunityId'] = opportunityId;
+    if (client) params['client'] = client;
+    return this.http.get<DynamicsDealContext>(`${this.baseUrl}/dynamics/deal-context`, { params });
+  }
+
+  getRoiDashboard(): Observable<RoiDashboardSummary> {
+    return this.http.get<RoiDashboardSummary>(`${this.baseUrl}/analytics/roi`);
+  }
+
+  getCustomerUsage(): Observable<CustomerUsageSummary> {
+    return this.http.get<CustomerUsageSummary>(`${this.baseUrl}/analytics/usage`);
+  }
+
   approveGeneration(body: ApproveGenerationRequest): Observable<GeneratedDocument> {
     return this.http.post<GeneratedDocument>(`${this.baseUrl}/generate/approve`, body);
   }
@@ -338,6 +480,47 @@ export class ApiService {
 
   exportGeneration(body: ExportGenerationRequest): Observable<ExportResult> {
     return this.http.post<ExportResult>(`${this.baseUrl}/generate/export`, body);
+  }
+
+  getComplianceChecklist(generationId: string, documentTitle?: string): Observable<ExportComplianceChecklist> {
+    const params = documentTitle ? { documentTitle } : undefined;
+    return this.http.get<ExportComplianceChecklist>(`${this.baseUrl}/governance/checklist/${generationId}`, { params });
+  }
+
+  submitComplianceChecklist(body: {
+    generationId: string;
+    userObjectId: string;
+    items: ComplianceChecklistItem[];
+  }): Observable<ComplianceChecklistResult> {
+    return this.http.post<ComplianceChecklistResult>(`${this.baseUrl}/governance/checklist`, body);
+  }
+
+  saveGenerationSnapshot(body: {
+    generationId: string;
+    userObjectId: string;
+    displayName?: string;
+    document: GeneratedDocument;
+  }): Observable<GenerationSnapshot> {
+    return this.http.post<GenerationSnapshot>(`${this.baseUrl}/governance/snapshots`, body);
+  }
+
+  listGenerationSnapshots(generationId: string): Observable<GenerationSnapshot[]> {
+    return this.http.get<GenerationSnapshot[]>(`${this.baseUrl}/governance/snapshots/${generationId}`);
+  }
+
+  diffGenerationVersions(generationId: string, fromVersion?: number, toVersion?: number): Observable<GenerationVersionDiff> {
+    const params: Record<string, string> = {};
+    if (fromVersion != null) params['fromVersion'] = String(fromVersion);
+    if (toVersion != null) params['toVersion'] = String(toVersion);
+    return this.http.get<GenerationVersionDiff>(`${this.baseUrl}/governance/diff/${generationId}`, { params });
+  }
+
+  logGovernanceAudit(evt: GovernanceAuditEvent): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/governance/audit`, evt);
+  }
+
+  getPipelineCapacity(): Observable<PipelineCapacityView> {
+    return this.http.get<PipelineCapacityView>(`${this.baseUrl}/planner/pipeline-capacity`);
   }
 
   /** Resolve relative local-export paths like /api/generate/download/... against the API host. */

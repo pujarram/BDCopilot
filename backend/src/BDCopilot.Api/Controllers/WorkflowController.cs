@@ -10,10 +10,12 @@ namespace BDCopilot.Api.Controllers;
 public class WorkflowController : ControllerBase
 {
     private readonly IGenerationWorkflowService _workflow;
+    private readonly IMultiApprovalService _multiApproval;
 
-    public WorkflowController(IGenerationWorkflowService workflow)
+    public WorkflowController(IGenerationWorkflowService workflow, IMultiApprovalService multiApproval)
     {
         _workflow = workflow;
+        _multiApproval = multiApproval;
     }
 
     /// <summary>Human approval gate — sets Status = Approved before export is allowed.</summary>
@@ -21,6 +23,42 @@ public class WorkflowController : ControllerBase
     [ProducesResponseType(typeof(GeneratedDocument), StatusCodes.Status200OK)]
     public async Task<ActionResult<GeneratedDocument>> Approve([FromBody] ApproveGenerationRequest request, CancellationToken ct)
         => Ok(await _workflow.ApproveAsync(request, ct));
+
+    [HttpPost("approvals/start")]
+    [ProducesResponseType(typeof(MultiApprovalStatus), StatusCodes.Status200OK)]
+    public async Task<ActionResult<MultiApprovalStatus>> StartMultiApproval(
+        [FromBody] StartMultiApprovalRequest request,
+        CancellationToken ct)
+        => Ok(await _multiApproval.StartAsync(request, ct));
+
+    [HttpPost("approvals/decide")]
+    [ProducesResponseType(typeof(MultiApprovalStatus), StatusCodes.Status200OK)]
+    public async Task<ActionResult<MultiApprovalStatus>> DecideApproval(
+        [FromBody] ReviewerDecisionRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await _multiApproval.DecideAsync(request, ct));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { title = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { title = ex.Message });
+        }
+    }
+
+    [HttpGet("approvals/{generationId:guid}")]
+    [ProducesResponseType(typeof(MultiApprovalStatus), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<MultiApprovalStatus>> ApprovalStatus(Guid generationId, CancellationToken ct)
+    {
+        var status = await _multiApproval.GetStatusAsync(generationId, ct);
+        return status is null ? NotFound() : Ok(status);
+    }
 
     /// <summary>Quiet accept/edit/discard logging for future voice tuning.</summary>
     [HttpPost("feedback")]
@@ -37,6 +75,20 @@ public class WorkflowController : ControllerBase
     {
         try
         {
+            var multi = await _multiApproval.GetStatusAsync(request.GenerationId, ct);
+            if (multi is not null && request.RequireApproved && !multi.IsFullyApproved)
+            {
+                return BadRequest(new
+                {
+                    title = $"Multi-reviewer approval incomplete (status: {multi.OverallStatus}). Legal and Sales must both approve."
+                });
+            }
+
+            if (multi?.IsFullyApproved == true)
+            {
+                request.Document.Status = "Approved";
+            }
+
             return Ok(await _workflow.ExportAsync(request, ct));
         }
         catch (InvalidOperationException ex)

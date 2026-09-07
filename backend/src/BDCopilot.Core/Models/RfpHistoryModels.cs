@@ -43,6 +43,15 @@ public class RfpDocument
     public string? ChannelUploadStatus { get; set; } // Pending | Uploaded | Failed | SkippedNoGraph
 
     public string? ChannelUploadError { get; set; }
+
+    /// <summary>Open | Win | Loss — Phase 6 win/loss tagging.</summary>
+    public string Outcome { get; set; } = "Open";
+
+    public string? OutcomeNotes { get; set; }
+
+    public Guid? OpportunityId { get; set; }
+
+    public DateTimeOffset? OutcomeTaggedAt { get; set; }
 }
 
 public class SaveRfpDocumentRequest
@@ -72,6 +81,8 @@ public class RfpDocumentListItem
     public DateTimeOffset CreatedAt { get; set; }
     public string? ChannelUploadStatus { get; set; }
     public string? ChannelSharePointUrl { get; set; }
+    public string Outcome { get; set; } = "Open";
+    public Guid? OpportunityId { get; set; }
 }
 
 public class AdminLoginRequest

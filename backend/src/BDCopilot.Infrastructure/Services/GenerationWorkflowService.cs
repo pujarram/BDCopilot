@@ -10,17 +10,20 @@ public class GenerationWorkflowService : IGenerationWorkflowService
     private readonly IDocumentExportService _exportService;
     private readonly IBlobStorageService _blobStorage;
     private readonly BdCopilotDbContext _db;
+    private readonly IGovernanceService _governance;
     private readonly ILogger<GenerationWorkflowService> _logger;
 
     public GenerationWorkflowService(
         IDocumentExportService exportService,
         IBlobStorageService blobStorage,
         BdCopilotDbContext db,
+        IGovernanceService governance,
         ILogger<GenerationWorkflowService> logger)
     {
         _exportService = exportService;
         _blobStorage = blobStorage;
         _db = db;
+        _governance = governance;
         _logger = logger;
     }
 
@@ -34,6 +37,17 @@ public class GenerationWorkflowService : IGenerationWorkflowService
             UserObjectId = request.UserObjectId,
             Action = "Approve",
             Notes = $"Approved document '{request.Document.Title}'"
+        }, ct);
+
+        await _governance.LogAuditAsync(new GovernanceAuditEvent
+        {
+            GenerationId = request.GenerationId,
+            UserObjectId = request.UserObjectId,
+            EventType = "Approve",
+            ResourceType = "Generation",
+            ResourceId = request.GenerationId.ToString(),
+            Outcome = "Approved",
+            Detail = $"Approved '{request.Document.Title}'."
         }, ct);
 
         _logger.LogInformation(
@@ -64,6 +78,12 @@ public class GenerationWorkflowService : IGenerationWorkflowService
         {
             throw new InvalidOperationException(
                 $"Generation {request.GenerationId} must be Approved before export (current status: {request.Document.Status}).");
+        }
+
+        if (!await _governance.IsExportAllowedAsync(request.GenerationId, ct))
+        {
+            throw new InvalidOperationException(
+                $"Generation {request.GenerationId} requires a completed compliance checklist before export.");
         }
 
         var format = request.Format.Trim().ToLowerInvariant();
@@ -102,6 +122,17 @@ public class GenerationWorkflowService : IGenerationWorkflowService
                 UserObjectId = request.UserObjectId,
                 Action = "Export",
                 Notes = $"Exported as {format}"
+            }, ct);
+
+            await _governance.LogAuditAsync(new GovernanceAuditEvent
+            {
+                GenerationId = request.GenerationId,
+                UserObjectId = request.UserObjectId,
+                EventType = "Export",
+                ResourceType = "Generation",
+                ResourceId = request.GenerationId.ToString(),
+                Outcome = "Success",
+                Detail = $"Exported '{request.Document.Title}' as {format}."
             }, ct);
 
             return new ExportResult

@@ -1,0 +1,114 @@
+<div class="admin-console">
+  <header class="admin-console__head">
+    <div>
+      <p class="admin-console__eyebrow">Partner / ISV</p>
+      <h2>Tenant onboarding wizard</h2>
+      <p>Step {{ step() }} of 4 — configure customer tenant, Planner groups, and Teams store packaging.</p>
+    </div>
+    <a routerLink="/admin"><fluent-button appearance="outline">Back to Admin</fluent-button></a>
+  </header>
+
+  @if (profile(); as p) {
+    @switch (step()) {
+      @case (1) {
+        <section class="onboard-step">
+          <h3>Customer identity</h3>
+          <div class="form-grid">
+            <div class="field">
+              <label for="ob-code">Customer code</label>
+              <fluent-text-input id="ob-code" [attr.value]="p.code" (input)="patch('code', $any($event.target).value)"></fluent-text-input>
+            </div>
+            <div class="field">
+              <label for="ob-name">Display name</label>
+              <fluent-text-input id="ob-name" [attr.value]="p.displayName" (input)="patch('displayName', $any($event.target).value)"></fluent-text-input>
+            </div>
+            <div class="field">
+              <label for="ob-tenant">Entra tenant ID</label>
+              <fluent-text-input id="ob-tenant" [attr.value]="p.tenantId" (input)="patch('tenantId', $any($event.target).value)"></fluent-text-input>
+            </div>
+          </div>
+          <fluent-button appearance="accent" (click)="next()">Next</fluent-button>
+        </section>
+      }
+      @case (2) {
+        <section class="onboard-step">
+          <h3>Azure resources</h3>
+          <div class="form-grid">
+            <div class="field">
+              <label for="ob-sub">Subscription ID</label>
+              <fluent-text-input id="ob-sub" [attr.value]="p.subscriptionId || ''" (input)="patch('subscriptionId', $any($event.target).value)"></fluent-text-input>
+            </div>
+            <div class="field">
+              <label for="ob-rg">Resource group</label>
+              <fluent-text-input id="ob-rg" [attr.value]="p.resourceGroup || ''" (input)="patch('resourceGroup', $any($event.target).value)"></fluent-text-input>
+            </div>
+            <div class="field">
+              <label for="ob-kv">Key Vault name</label>
+              <fluent-text-input id="ob-kv" [attr.value]="p.keyVaultName || ''" (input)="patch('keyVaultName', $any($event.target).value)"></fluent-text-input>
+            </div>
+            <div class="field">
+              <label for="ob-app">App Service name</label>
+              <fluent-text-input id="ob-app" [attr.value]="p.appServiceName || ''" (input)="patch('appServiceName', $any($event.target).value)"></fluent-text-input>
+            </div>
+          </div>
+          <div class="onboard-nav">
+            <fluent-button (click)="back()">Back</fluent-button>
+            <fluent-button appearance="accent" (click)="next()">Next</fluent-button>
+          </div>
+        </section>
+      }
+      @case (3) {
+        <section class="onboard-step">
+          <h3>Planner &amp; SharePoint</h3>
+          <div class="form-grid">
+            <div class="field field--full">
+              <label for="ob-groups">Planner GroupIds (comma or newline)</label>
+              <textarea id="ob-groups" rows="3" [value]="p.plannerGroupIds.join(', ')" (input)="patchGroupIds($any($event.target).value)"></textarea>
+            </div>
+            <div class="field field--full">
+              <label for="ob-site">Pilot SharePoint site path</label>
+              <fluent-text-input id="ob-site" [attr.value]="p.pilotSitePath || ''" (input)="patch('pilotSitePath', $any($event.target).value)"></fluent-text-input>
+            </div>
+            <div class="field">
+              <label for="ob-graph">Graph app ID</label>
+              <fluent-text-input id="ob-graph" [attr.value]="p.graphAppId || ''" (input)="patch('graphAppId', $any($event.target).value)"></fluent-text-input>
+            </div>
+            <div class="field">
+              <label for="ob-spa">SPA app ID</label>
+              <fluent-text-input id="ob-spa" [attr.value]="p.spaAppId || ''" (input)="patch('spaAppId', $any($event.target).value)"></fluent-text-input>
+            </div>
+          </div>
+          <div class="onboard-nav">
+            <fluent-button (click)="back()">Back</fluent-button>
+            <fluent-button appearance="accent" [attr.disabled]="saving() ? true : null" (click)="save()">
+              {{ saving() ? 'Saving…' : 'Save & continue' }}
+            </fluent-button>
+          </div>
+        </section>
+      }
+      @case (4) {
+        <section class="onboard-step">
+          <h3>Teams store packaging</h3>
+          <p class="dash__muted">
+            Download the Teams app manifest, add icon assets, then sideload for pilot or submit as a managed app in Partner Center.
+          </p>
+          <div class="form-grid">
+            <div class="field field--full">
+              <label for="ob-base">Manifest base URL</label>
+              <fluent-text-input id="ob-base" [attr.value]="p.teamsManifestBaseUrl || ''" (input)="patch('teamsManifestBaseUrl', $any($event.target).value)"></fluent-text-input>
+            </div>
+          </div>
+          <div class="onboard-nav">
+            <fluent-button (click)="back()">Back</fluent-button>
+            <fluent-button appearance="accent" [attr.disabled]="manifestBusy() ? true : null" (click)="downloadManifest()">
+              {{ manifestBusy() ? 'Preparing…' : 'Download Teams manifest' }}
+            </fluent-button>
+          </div>
+          <p class="dash__muted">Cutover scripts: <code class="mono">docs/azure/Invoke-CustomerCutover.ps1</code></p>
+        </section>
+      }
+    }
+  } @else {
+    <p class="dash__muted">Loading profile…</p>
+  }
+</div>

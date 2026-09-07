@@ -1,9 +1,11 @@
 using BDCopilot.Core.Interfaces;
 using BDCopilot.Core.Models;
 using BDCopilot.Infrastructure.Data;
+using BDCopilot.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace BDCopilot.Api.Controllers;
 
@@ -17,19 +19,22 @@ public class DocumentsController : ControllerBase
     private readonly BdCopilotDbContext _db;
     private readonly IAccessControlService _accessControl;
     private readonly ILocalDocumentSyncService _localSync;
+    private readonly LibraryStalenessSettings _staleness;
 
     public DocumentsController(
         BdCopilotDbContext db,
         IAccessControlService accessControl,
-        ILocalDocumentSyncService localSync)
+        ILocalDocumentSyncService localSync,
+        IOptions<LibraryStalenessSettings> staleness)
     {
         _db = db;
         _accessControl = accessControl;
         _localSync = localSync;
+        _staleness = staleness.Value;
     }
 
     /// <param name="userObjectId">Entra ID object id of the caller.</param>
-    /// <param name="corpusSource">Local | Online | All</param>
+    /// <param name="corpusSource">Local | Online | Planner | Battlecards | All</param>
     [HttpGet]
     [ProducesResponseType(typeof(List<DocumentListItem>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<DocumentListItem>>> List(
@@ -45,7 +50,9 @@ public class DocumentsController : ControllerBase
         documentsQuery = source switch
         {
             CorpusSources.Local => documentsQuery.Where(d => d.GraphDriveId == CorpusSources.LocalDriveId),
-            CorpusSources.Online => documentsQuery.Where(d => d.GraphDriveId != CorpusSources.LocalDriveId),
+            CorpusSources.Online => documentsQuery.Where(d => CorpusSources.IsOnlineDocument(d)),
+            CorpusSources.Planner => documentsQuery.Where(d => d.GraphDriveId == CorpusSources.PlannerDriveId),
+            CorpusSources.Battlecards => documentsQuery.Where(d => d.GraphDriveId == CorpusSources.BattlecardsDriveId),
             _ => documentsQuery
         };
 
@@ -56,16 +63,31 @@ public class DocumentsController : ControllerBase
         var accessibleIds = await _accessControl.FilterAccessibleDocumentIdsAsync(
             userObjectId, documents.Select(d => d.DocumentId), ct);
 
-        var items = documents.Select(d => new DocumentListItem
+        var staleMonths = Math.Max(1, _staleness.StaleAfterMonths);
+        var cutoff = DateTimeOffset.UtcNow.AddMonths(-staleMonths);
+
+        var items = documents.Select(d =>
         {
-            DocumentId = d.DocumentId,
-            FileName = d.FileName,
-            FileType = d.FileType,
-            TeamsChannel = d.TeamsChannel,
-            ModifiedDate = d.ModifiedDate,
-            AccessibleToCaller = accessibleIds.Contains(d.DocumentId),
-            IndexStatus = d.IndexStatus.ToString(),
-            CorpusSource = CorpusSources.IsLocalDocument(d) ? CorpusSources.Local : CorpusSources.Online
+            var months = (int)Math.Max(0, (DateTimeOffset.UtcNow - d.ModifiedDate).TotalDays / 30.0);
+            var corpus = CorpusSources.IsLocalDocument(d) ? CorpusSources.Local
+                : CorpusSources.IsPlannerDocument(d) ? CorpusSources.Planner
+                : CorpusSources.IsBattlecardsDocument(d) ? CorpusSources.Battlecards
+                : CorpusSources.Online;
+            return new DocumentListItem
+            {
+                DocumentId = d.DocumentId,
+                FileName = d.FileName,
+                FileType = d.FileType,
+                TeamsChannel = d.TeamsChannel,
+                ModifiedDate = d.ModifiedDate,
+                AccessibleToCaller = accessibleIds.Contains(d.DocumentId),
+                IndexStatus = d.IndexStatus.ToString(),
+                CorpusSource = corpus,
+                LastIndexedAt = d.LastIndexedAt,
+                IsStale = d.ModifiedDate < cutoff,
+                MonthsSinceModified = months,
+                StaleAfterMonths = staleMonths
+            };
         }).ToList();
 
         return Ok(items);

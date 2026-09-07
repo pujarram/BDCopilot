@@ -127,6 +127,18 @@ public class DashboardController : ControllerBase
                 },
                 new DashboardQuickLink
                 {
+                    Label = "Pursuits",
+                    Path = "/pursuits",
+                    Description = "Opportunity tracker, win/loss, linked docs"
+                },
+                new DashboardQuickLink
+                {
+                    Label = "ROI & usage",
+                    Path = "/analytics",
+                    Description = "Time saved, win-rate trend, customer AI cost"
+                },
+                new DashboardQuickLink
+                {
                     Label = "Admin Console",
                     Path = "/admin",
                     Description = "Reindex, audits, token costs, telemetry"

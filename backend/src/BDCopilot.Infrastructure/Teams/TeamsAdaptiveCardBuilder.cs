@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using BDCopilot.Core.Models;
 
 namespace BDCopilot.Infrastructure.Teams;
 
@@ -60,6 +61,38 @@ public static class TeamsAdaptiveCardBuilder
         };
     }
 
+    public static JsonObject StalledAlertCard(
+        IReadOnlyList<PlannerStalledAlert> alerts,
+        string dashboardUrl)
+    {
+        var body = new JsonArray
+        {
+            TextBlock("Progress stalled (7+ days)", "Large", true),
+            TextBlock($"{alerts.Count} task(s) unchanged", "Medium", true)
+        };
+
+        foreach (var a in alerts.Take(5))
+        {
+            body.Add(FactSet(
+                (a.Title, $"{a.PercentComplete}% · {a.StalledDays}d"),
+                ("Owner", a.AssignedUsers ?? "Unassigned")));
+        }
+
+        if (alerts.Count > 5)
+        {
+            body.Add(TextBlock($"+ {alerts.Count - 5} more in dashboard", "Small"));
+        }
+
+        return new JsonObject
+        {
+            ["type"] = "AdaptiveCard",
+            ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
+            ["version"] = "1.5",
+            ["body"] = body,
+            ["actions"] = Actions(dashboardUrl, "Review stalled work")
+        };
+    }
+
     public static JsonObject DelayedTasksCard(int delayedCount, string topTasksText, string dashboardUrl)
     {
         return new JsonObject
@@ -74,6 +107,71 @@ public static class TeamsAdaptiveCardBuilder
                 TextBlock(Truncate(topTasksText, 320), "Default", false)
             },
             ["actions"] = Actions(dashboardUrl, "View in dashboard")
+        };
+    }
+
+    public static JsonObject PursuitDeadlineCard(
+        IReadOnlyList<PursuitDeadlineAlert> alerts,
+        string dashboardUrl)
+    {
+        var body = new JsonArray
+        {
+            TextBlock("Pursuit deadlines", "Large", true),
+            TextBlock($"{alerts.Count} pursuit(s) due within 14 days", "Medium", true)
+        };
+
+        foreach (var a in alerts.Take(5))
+        {
+            body.Add(FactSet(
+                (a.Name, $"{a.DaysRemaining}d · {a.Stage}"),
+                ("Client", a.Client),
+                ("Owner", a.OwnerDisplayName ?? "Unassigned")));
+        }
+
+        if (alerts.Count > 5)
+        {
+            body.Add(TextBlock($"+ {alerts.Count - 5} more in dashboard", "Small"));
+        }
+
+        return new JsonObject
+        {
+            ["type"] = "AdaptiveCard",
+            ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
+            ["version"] = "1.5",
+            ["body"] = body,
+            ["actions"] = Actions(dashboardUrl, "Review pipeline")
+        };
+    }
+
+    public static JsonObject StaleDocumentCard(
+        IReadOnlyList<StaleDocumentAlert> alerts,
+        string libraryUrl)
+    {
+        var body = new JsonArray
+        {
+            TextBlock("Stale library documents", "Large", true),
+            TextBlock($"{alerts.Count} document(s) need refresh", "Medium", true)
+        };
+
+        foreach (var a in alerts.Take(5))
+        {
+            body.Add(FactSet(
+                (a.FileName, $"{a.MonthsSinceModified} months old"),
+                ("Corpus", a.CorpusSource)));
+        }
+
+        if (alerts.Count > 5)
+        {
+            body.Add(TextBlock($"+ {alerts.Count - 5} more in library", "Small"));
+        }
+
+        return new JsonObject
+        {
+            ["type"] = "AdaptiveCard",
+            ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
+            ["version"] = "1.5",
+            ["body"] = body,
+            ["actions"] = Actions(libraryUrl, "Open document library")
         };
     }
 

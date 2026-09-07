@@ -27,6 +27,14 @@
       <option value="SteeringCommittee">Steering committee</option>
     </select>
   </div>
+  <div class="field">
+    <label for="bc-compliance">Compliance region</label>
+    <select id="bc-compliance" [value]="complianceRegion()" (change)="complianceRegion.set($any($event.target).value)">
+      <option value="EU">EU / GDPR</option>
+      <option value="US">US</option>
+      <option value="FI">Finland</option>
+    </select>
+  </div>
   <div class="field field--full">
     <span class="field-label">Document source</span>
     <div class="corpus-radios" role="radiogroup" aria-label="Document source">

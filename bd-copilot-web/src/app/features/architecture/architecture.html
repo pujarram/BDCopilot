@@ -1,6 +1,11 @@
 <div class="doc">
   <h2>System architecture</h2>
-  <p class="lede">Two flows share one brain. An indexing pipeline keeps a vector store current with everything in SharePoint and Teams; a query pipeline answers a Teams chat message by reading that same store — but only after checking, for that specific user, that they're allowed to see each source. That check is what makes the rest of this safe to build.</p>
+  <p class="lede">
+    Two flows share one brain for knowledge, and the same API powers pursuit, delivery, and governance.
+    An indexing pipeline keeps vector stores current with SharePoint, Teams, Planner, and battlecards;
+    a query / generation pipeline answers Teams chat and drafts RFPs — only after permission checks —
+    then multi-approval, compliance checklist, and an audit trail gate export.
+  </p>
 
   <figure>
     <svg viewBox="0 0 1320 500" role="img" aria-label="Diagram of the BD Copilot architecture: an indexing pipeline from SharePoint and Teams files through a document processing service into a shared vector store, and a query pipeline from Teams chat through the Angular app and .NET API, an Entra ID access-control check, the same vector store, a swappable LLM layer, and back to Teams as a grounded answer with citations.">
@@ -22,15 +27,15 @@
 
       <text x="40" y="46" class="lbl" style="font-weight:600; opacity:0.85;">INDEXING · scheduled, incremental</text>
       <rect class="box" x="40" y="60" width="190" height="66"/>
-      <text x="135" y="88" text-anchor="middle" font-size="12.5" font-weight="600">SharePoint · OneDrive</text>
-      <text x="135" y="105" text-anchor="middle" class="sub">Teams channel files</text>
+      <text x="135" y="88" text-anchor="middle" font-size="12.5" font-weight="600">SharePoint · Planner</text>
+      <text x="135" y="105" text-anchor="middle" class="sub">Teams files · battlecards</text>
 
       <line class="flow" x1="230" y1="93" x2="292" y2="93" marker-end="url(#arrow)"/>
-      <text x="261" y="83" text-anchor="middle" class="lbl">delta query</text>
+      <text x="261" y="83" text-anchor="middle" class="lbl">delta / sync</text>
 
       <rect class="box" x="296" y="60" width="210" height="66"/>
       <text x="401" y="84" text-anchor="middle" font-size="12.5" font-weight="600">Document Processing</text>
-      <text x="401" y="100" text-anchor="middle" class="sub">OpenXML · ClosedXML · PdfPig · OCR</text>
+      <text x="401" y="100" text-anchor="middle" class="sub">OpenXML · ClosedXML · PdfPig</text>
       <text x="401" y="115" text-anchor="middle" class="sub">parse → chunk → embed</text>
 
       <path class="flow" d="M506,93 C560,93 560,190 610,208" marker-end="url(#arrow)"/>
@@ -39,27 +44,27 @@
       <rect x="610" y="208" width="220" height="84" rx="10" fill="currentColor" opacity="0.08"/>
       <rect class="box" x="610" y="208" width="220" height="84" opacity="0.9"/>
       <text x="720" y="242" text-anchor="middle" font-size="13" font-weight="700">Vector Store</text>
-      <text x="720" y="259" text-anchor="middle" class="sub">Azure AI Search / pgvector</text>
-      <text x="720" y="274" text-anchor="middle" class="sub">chunk + embedding + ACL metadata</text>
+      <text x="720" y="259" text-anchor="middle" class="sub">pgvector · Azure AI Search</text>
+      <text x="720" y="274" text-anchor="middle" class="sub">chunk + embedding + ACL</text>
 
       <text x="40" y="376" class="lbl" style="font-weight:600; opacity:0.85;">QUERY · real time, per Teams message</text>
       <rect class="box" x="40" y="390" width="150" height="66"/>
       <text x="115" y="418" text-anchor="middle" font-size="12.5" font-weight="600">Teams Chat</text>
-      <text x="115" y="435" text-anchor="middle" class="sub">user's question</text>
+      <text x="115" y="435" text-anchor="middle" class="sub">Q&amp;A · Adaptive Cards</text>
 
       <line class="flow" x1="190" y1="423" x2="242" y2="423" marker-end="url(#arrow)"/>
       <text x="216" y="413" text-anchor="middle" class="lbl">prompt</text>
 
       <rect class="box" x="246" y="390" width="150" height="66"/>
       <text x="321" y="418" text-anchor="middle" font-size="12.5" font-weight="600">Angular Tab App</text>
-      <text x="321" y="435" text-anchor="middle" class="sub">Teams SDK · Fluent UI</text>
+      <text x="321" y="435" text-anchor="middle" class="sub">Teams SDK · Fluent · MSAL</text>
 
       <line class="flow" x1="396" y1="423" x2="448" y2="423" marker-end="url(#arrow)"/>
       <text x="422" y="413" text-anchor="middle" class="lbl">HTTPS</text>
 
       <rect class="box" x="452" y="390" width="150" height="66"/>
       <text x="527" y="418" text-anchor="middle" font-size="12.5" font-weight="600">.NET Core API</text>
-      <text x="527" y="435" text-anchor="middle" class="sub">orchestration</text>
+      <text x="527" y="435" text-anchor="middle" class="sub">RAG · gen · PI · govern</text>
 
       <rect x="628" y="390" width="174" height="66" rx="9" fill="currentColor" opacity="0.06"/>
       <rect x="628" y="390" width="174" height="66" rx="9" fill="none" stroke="var(--gold, #b8770f)" stroke-width="1.6"/>
@@ -90,7 +95,10 @@
       <path class="flow" d="M1176,390 C1176,300 400,260 190,412" marker-end="url(#arrow)" opacity="0.45"/>
       <text x="700" y="483" text-anchor="middle" class="lbl" opacity="0.6">renders back into the Teams chat thread</text>
     </svg>
-    <figcaption>Indexing (top) and query (bottom) are two independent, differently-timed flows that meet at one shared vector store. The gold box is the only place permissions are decided — everything to its right only ever sees content that user could already open in SharePoint.</figcaption>
+    <figcaption>
+      Indexing (top) and query (bottom) meet at one shared vector store. The gold box is where permissions are decided.
+      Generators, pursuits, ROI, Project Intelligence, and governance share the same .NET API, Postgres metadata, and identity — see the demo brief for full context diagrams.
+    </figcaption>
   </figure>
 
   <div class="callout">
@@ -99,12 +107,21 @@
   </div>
 
   <hr class="section-rule"/>
-  <h2>What this codebase actually implements today</h2>
-  <p>This scaffold is Phase 0/1 of the roadmap below — the shape is real, some pieces are deliberate stubs:</p>
+  <h2>What this codebase implements today</h2>
+  <p class="m">Phases 1–9 of the product roadmap are in the running application — knowledge, generators, pursuits, analytics, Project Intelligence, and export governance share one stack.</p>
 
-  <h3>Real</h3>
-  <p class="m">The Angular ⇄ .NET ⇄ Postgres/pgvector path, the Semantic Kernel provider abstraction (Ollama/Azure OpenAI chosen entirely by <code class="mono">Ai:Provider</code>), Swagger, Hangfire's recurring-job scheduling, and the retrieval + generation logic all run end-to-end once you point them at a real database and a running Ollama (or Azure OpenAI) endpoint.</p>
+  <h3>Knowledge &amp; RAG</h3>
+  <p class="m">Hangfire Graph delta + local docs indexing into PostgreSQL/pgvector (optional Azure AI Search with tenant/corpus filters). Grounded chat and Find &amp; reuse with citations; Local / Online / Planner / Battlecards / All corpora; Document Library with staleness flags.</p>
 
-  <h3>Stubbed on purpose</h3>
-  <p class="m"><code class="mono">AccessControlService</code> allows any authenticated caller through today and logs what a real check would have filtered — wiring it to live Microsoft Graph permission calls is Phase 2, once the Teams app is registered in Entra ID. <code class="mono">DocumentSyncService</code> doesn't call Graph yet either; see its doc comment for the three steps that finish it. Neither stub is hidden — both log loudly and are the two things to build next.</p>
+  <h3>Create &amp; pursue</h3>
+  <p class="m">Streaming RFP, business case, proposal, and competitive generators; Dynamics deal context; win/loss tagging with retrieval boost; opportunity tracker; Legal + Sales multi-approval; EU / US / FI compliance packs.</p>
+
+  <h3>Deliver</h3>
+  <p class="m">Planner sync, Gantt, capacity heat map, stalled alerts, fusion cross-links with feedback, AI PM health score with “why” factors, pipeline-vs-capacity staffing gaps, burndown, unified briefs.</p>
+
+  <h3>Govern &amp; operate</h3>
+  <p class="m">Export compliance checklist, version snapshots / diff, SOC2/ISO27001-aligned audit on generate / approve / export; Admin telemetry, access audits, capacity CSV import, partner onboarding wizard; Teams Adaptive Cards for sprint, stalled, pursuit deadlines, and stale documents.</p>
+
+  <h3>Production posture</h3>
+  <p class="m">Entra MSAL SSO + JWT, production flags (<code class="mono">EnforceAcl</code>, <code class="mono">RequireAuthOnApi</code>), Key Vault / cutover scripts, App Insights workbooks — see <code class="mono">docs/PRODUCTION_HARDENING.md</code> and <code class="mono">docs/BDCopilot-Demo-Brief.html</code> for the full architecture diagrams.</p>
 </div>

@@ -41,6 +41,7 @@ export class BusinessCase implements OnInit, OnDestroy {
   protected readonly initiative = signal('AI Wealth Copilot Platform');
   protected readonly audience = signal('ExecutiveSponsor');
   protected readonly corpusSource = signal<CorpusSource>('Online');
+  protected readonly complianceRegion = signal('EU');
   protected readonly focusNotes = signal<string | null>(null);
   protected readonly reuseBanner = signal<SearchReusePayload | null>(null);
 
@@ -301,7 +302,8 @@ export class BusinessCase implements OnInit, OnDestroy {
           audience: this.audience(),
           userObjectId: this.teams.user().objectId,
           corpusSource: this.corpusSource(),
-          focusNotes: this.focusNotes() ?? undefined
+          focusNotes: this.focusNotes() ?? undefined,
+          complianceRegion: this.complianceRegion()
         },
         signal
       );

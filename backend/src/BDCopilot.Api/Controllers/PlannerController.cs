@@ -14,17 +14,26 @@ public class PlannerController : ControllerBase
     private readonly IProjectManagerService _projectManager;
     private readonly IPlannerSnapshotService _snapshots;
     private readonly IUnifiedIntelligenceService _unified;
+    private readonly IPlannerCapacityService _capacity;
+    private readonly IDeliveryCrossLinkService _crossLinks;
+    private readonly IPipelineCapacityService _pipeline;
 
     public PlannerController(
         IPlannerSyncService planner,
         IProjectManagerService projectManager,
         IPlannerSnapshotService snapshots,
-        IUnifiedIntelligenceService unified)
+        IUnifiedIntelligenceService unified,
+        IPlannerCapacityService capacity,
+        IDeliveryCrossLinkService crossLinks,
+        IPipelineCapacityService pipeline)
     {
         _planner = planner;
         _projectManager = projectManager;
         _snapshots = snapshots;
         _unified = unified;
+        _capacity = capacity;
+        _crossLinks = crossLinks;
+        _pipeline = pipeline;
     }
 
     [HttpGet("health")]
@@ -105,4 +114,65 @@ public class PlannerController : ControllerBase
     [ProducesResponseType(typeof(PlannerSyncResult), StatusCodes.Status200OK)]
     public async Task<ActionResult<PlannerSyncResult>> Sync(CancellationToken ct)
         => Ok(await _planner.SyncAsync(ct));
+
+    [HttpGet("capacity")]
+    [ProducesResponseType(typeof(PlannerCapacityHeatmap), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PlannerCapacityHeatmap>> Capacity(
+        [FromQuery] int weeks = 6,
+        CancellationToken ct = default)
+        => Ok(await _capacity.GetHeatmapAsync(weeks, ct));
+
+    [HttpGet("alerts/stalled")]
+    [ProducesResponseType(typeof(List<PlannerStalledAlert>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<PlannerStalledAlert>>> StalledAlerts(
+        [FromQuery] int days = 7,
+        CancellationToken ct = default)
+        => Ok(await _snapshots.GetStalledAlertsAsync(days, ct));
+
+    [HttpGet("cross-links")]
+    [ProducesResponseType(typeof(DeliveryCrossLinkResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<DeliveryCrossLinkResponse>> CrossLinks(
+        [FromQuery] string userObjectId,
+        [FromQuery] int maxTasks = 8,
+        [FromQuery] bool refresh = false,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(userObjectId))
+        {
+            return BadRequest("userObjectId is required.");
+        }
+
+        return Ok(await _crossLinks.GetCrossLinksAsync(userObjectId, maxTasks, refresh, ct));
+    }
+
+    [HttpPost("cross-links/feedback")]
+    [ProducesResponseType(typeof(CrossLinkFeedbackResult), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CrossLinkFeedbackResult>> CrossLinkFeedback(
+        [FromBody] CrossLinkFeedbackRequest request,
+        CancellationToken ct = default)
+    {
+        if (request.LinkId == Guid.Empty || string.IsNullOrWhiteSpace(request.UserObjectId))
+        {
+            return BadRequest("linkId and userObjectId are required.");
+        }
+
+        return Ok(await _crossLinks.SubmitFeedbackAsync(request, ct));
+    }
+
+    [HttpGet("pipeline-capacity")]
+    [ProducesResponseType(typeof(PipelineCapacityView), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PipelineCapacityView>> PipelineCapacity(CancellationToken ct)
+        => Ok(await _pipeline.GetPipelineCapacityAsync(ct));
+
+    [HttpGet("alerts/pursuit-deadlines")]
+    [ProducesResponseType(typeof(List<PursuitDeadlineAlert>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<PursuitDeadlineAlert>>> PursuitDeadlines(
+        [FromQuery] int withinDays = 14,
+        CancellationToken ct = default)
+        => Ok(await _pipeline.GetPursuitDeadlineAlertsAsync(withinDays, ct));
+
+    [HttpGet("alerts/stale-documents")]
+    [ProducesResponseType(typeof(List<StaleDocumentAlert>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<StaleDocumentAlert>>> StaleDocuments(CancellationToken ct)
+        => Ok(await _pipeline.GetStaleDocumentAlertsAsync(ct));
 }

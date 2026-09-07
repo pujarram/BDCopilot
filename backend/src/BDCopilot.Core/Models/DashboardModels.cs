@@ -76,20 +76,46 @@ public class TenantCutoverItem
     public string Status { get; set; } = "pending";
     public string Detail { get; set; } = "";
     public string? Action { get; set; }
+    /// <summary>When false, item is post-go-live verification (not counted in 12/12 gate).</summary>
+    public bool GoLiveRequired { get; set; } = true;
 }
 
 public class TenantCutoverStatus
 {
     public bool ReadyForProduction { get; set; }
+    /// <summary>True when all checklist items (typically 12/12) are complete — required before go-live demo.</summary>
+    public bool GoLiveReady { get; set; }
     public int CompletedCount { get; set; }
     public int TotalCount { get; set; }
+    public List<string> PendingItemIds { get; set; } = [];
+    public string? CustomerCode { get; set; }
+    public string? CustomerDisplayName { get; set; }
+    public string? CustomerProfilePath { get; set; }
+    public bool SharePointConfigured { get; set; }
+    public int SharePointSiteCount { get; set; }
     public bool KeyVaultConfigured { get; set; }
     public string? KeyVaultUri { get; set; }
     public string WorkbookImportPath { get; set; } = "docs/azure/BDCopilot-Monitor.workbook.json";
     public string WorkbookImportScript { get; set; } = "docs/azure/Import-MonitorWorkbook.ps1";
+    public string CutoverScript { get; set; } = "docs/azure/Invoke-CustomerCutover.ps1";
+    public string ValidateScript { get; set; } = "docs/azure/Test-CutoverChecklist.ps1";
     public List<TenantCutoverItem> Items { get; set; } = [];
     public PlannerLiveStatus? PlannerLive { get; set; }
+    public CustomerTenantProfile? TenantProfile { get; set; }
     public int AccessDenialsLast24Hours { get; set; }
     public int AccessAuditsLast24Hours { get; set; }
     public string AclVerificationGuidance { get; set; } = "";
+    public string GoLiveGuidance { get; set; } = "";
+}
+
+/// <summary>Customer-specific ids documented for rollout (from live configuration).</summary>
+public class CustomerTenantProfile
+{
+    public string? TenantId { get; set; }
+    public List<string> PlannerGroupIds { get; set; } = [];
+    public List<string> PlannerPlanIds { get; set; } = [];
+    public string? PilotSitePath { get; set; }
+    public string? PilotSiteId { get; set; }
+    public List<string> SharePointSiteIds { get; set; } = [];
+    public List<string> SyncFolderPaths { get; set; } = [];
 }

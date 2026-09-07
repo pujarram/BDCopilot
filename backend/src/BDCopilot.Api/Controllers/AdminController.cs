@@ -24,6 +24,10 @@ public class AdminController : ControllerBase
     private readonly GraphClientFactory _graph;
     private readonly PlannerSyncSettings _planner;
     private readonly AzureAdSettings _azureAd;
+    private readonly GraphSyncSettings _graphSettings;
+    private readonly CustomerRolloutSettings _customer;
+    private readonly ICapacityImportService _capacityImport;
+    private readonly IPartnerOnboardingService _onboarding;
 
     public AdminController(
         IDocumentSyncService sync,
@@ -32,7 +36,11 @@ public class AdminController : ControllerBase
         IConfiguration config,
         GraphClientFactory graph,
         IOptions<PlannerSyncSettings> planner,
-        IOptions<AzureAdSettings> azureAd)
+        IOptions<AzureAdSettings> azureAd,
+        IOptions<GraphSyncSettings> graphSettings,
+        IOptions<CustomerRolloutSettings> customer,
+        ICapacityImportService capacityImport,
+        IPartnerOnboardingService onboarding)
     {
         _sync = sync;
         _audits = audits;
@@ -41,6 +49,10 @@ public class AdminController : ControllerBase
         _graph = graph;
         _planner = planner.Value;
         _azureAd = azureAd.Value;
+        _graphSettings = graphSettings.Value;
+        _customer = customer.Value;
+        _capacityImport = capacityImport;
+        _onboarding = onboarding;
     }
 
     [HttpPost("reindex")]
@@ -183,6 +195,14 @@ public class AdminController : ControllerBase
         var postgres = !string.IsNullOrWhiteSpace(_config.GetConnectionString("Postgres"));
         var plannerStatus = PlannerStatus().Value!;
 
+        var sharePointSiteCount = _graphSettings.SiteIds.Count(id => !string.IsNullOrWhiteSpace(id))
+                                  + (string.IsNullOrWhiteSpace(_graphSettings.PilotSiteId) ? 0 : 1)
+                                  + (string.IsNullOrWhiteSpace(_graphSettings.PilotSitePath) ? 0 : 1);
+        var sharePointConfigured = _graph.IsConfigured
+            && sharePointSiteCount > 0;
+
+        var kvAndGraph = keyVaultConfigured && _graph.IsConfigured;
+
         var denials24h = await _db.AccessAuditRecords
             .CountAsync(a => !a.Allowed && a.CreatedAt >= since24h, ct);
         var audits24h = await _db.AccessAuditRecords
@@ -192,18 +212,22 @@ public class AdminController : ControllerBase
 
         var items = new List<TenantCutoverItem>
         {
-            Item("kv", "Key Vault linked (KEYVAULT_URI / KeyVault:Uri)", keyVaultConfigured,
-                keyVaultConfigured ? "Secrets loaded from Key Vault" : "Set KEYVAULT_URI on App Service; grant Managed Identity Secret Get",
-                "docs/azure/Setup-KeyVaultSecrets.ps1"),
-            Item("graph-secrets", "Graph credentials (TenantId, ClientId, ClientSecret)", _graph.IsConfigured,
-                _graph.IsConfigured ? "Graph app-only client configured" : "Populate Graph-ClientSecret in Key Vault",
+            Item("kv-graph", "Key Vault + Graph credentials", kvAndGraph,
+                kvAndGraph
+                    ? $"Secrets from {keyVaultUri}; Graph app-only client configured"
+                    : "Set KEYVAULT_URI and Graph--TenantId/ClientId/ClientSecret in Key Vault",
                 "docs/azure/Setup-KeyVaultSecrets.ps1"),
             Item("graph-consent", "Graph admin consent (Tasks.Read.All, Group.Read.All)", _graph.IsConfigured,
                 "Run Grant-GraphPlannerConsent.ps1 after adding app permissions in Entra",
                 "docs/azure/Grant-GraphPlannerConsent.ps1"),
             Item("planner-ids", "Planner GroupIds / PlanIds (live sync)", plannerStatus.IsLiveConfigured,
                 plannerStatus.Guidance,
-                "docs/PRODUCTION_HARDENING.md#1-live-graph-planner"),
+                "docs/azure/customers/README.md"),
+            Item("sharepoint-sites", "SharePoint sites configured (PilotSitePath / SiteIds)", sharePointConfigured,
+                sharePointConfigured
+                    ? $"{sharePointSiteCount} site(s) · path {_graphSettings.PilotSitePath ?? "—"}"
+                    : "Set Graph--PilotSitePath and/or Graph--SiteIds--N in Key Vault",
+                "docs/azure/customers/README.md"),
             Item("entra-api", "Entra API app (TenantId, ClientId, Audience)", entraConfigured,
                 entraConfigured ? "JWT validation enabled" : "Set AzureAd:TenantId and AzureAd:ClientId",
                 "docs/PRODUCTION_HARDENING.md#2-entra-sso-msal--api-jwt"),
@@ -240,39 +264,63 @@ public class AdminController : ControllerBase
                 null),
             Item("monitor-wb", "Azure Monitor workbook published", appInsights,
                 "Import docs/azure/BDCopilot-Monitor.workbook.json via Import-MonitorWorkbook.ps1",
-                "docs/azure/Import-MonitorWorkbook.ps1"),
+                "docs/azure/Import-MonitorWorkbook.ps1", goLiveRequired: false),
             Item("acl-audits", "ACL audit trail active (24h)", audits24h > 0 || (_azureAd.EnforceAcl && _graph.IsConfigured),
                 audits24h > 0
                     ? $"{audits24h} audit entries in 24h ({denials24h} denials) — review Admin Console table below"
                     : "Run retrieval/chat after EnforceAcl to populate access_audit",
-                null)
+                null, goLiveRequired: false)
         };
 
-        var completed = items.Count(i => i.Complete);
-        var ready = items.Where(i => i.Id is not "monitor-wb" and not "acl-audits")
-            .All(i => i.Complete);
+        var goLiveItems = items.Where(i => i.GoLiveRequired).ToList();
+        var completed = goLiveItems.Count(i => i.Complete);
+        var pendingIds = goLiveItems.Where(i => !i.Complete).Select(i => i.Id).ToList();
+        var coreReady = pendingIds.Count == 0;
+        var goLiveReady = coreReady;
+
+        var tenantProfile = new CustomerTenantProfile
+        {
+            TenantId = string.IsNullOrWhiteSpace(_azureAd.TenantId) ? _graphSettings.TenantId : _azureAd.TenantId,
+            PlannerGroupIds = _planner.GroupIds.Where(id => !string.IsNullOrWhiteSpace(id)).ToList(),
+            PlannerPlanIds = _planner.PlanIds.Where(id => !string.IsNullOrWhiteSpace(id)).ToList(),
+            PilotSitePath = _graphSettings.PilotSitePath,
+            PilotSiteId = _graphSettings.PilotSiteId,
+            SharePointSiteIds = _graphSettings.SiteIds.Where(id => !string.IsNullOrWhiteSpace(id)).ToList(),
+            SyncFolderPaths = _graphSettings.SyncFolderPaths.Where(p => !string.IsNullOrWhiteSpace(p)).ToList()
+        };
 
         return Ok(new TenantCutoverStatus
         {
-            ReadyForProduction = ready,
+            ReadyForProduction = coreReady,
+            GoLiveReady = goLiveReady,
             CompletedCount = completed,
-            TotalCount = items.Count,
+            TotalCount = goLiveItems.Count,
+            PendingItemIds = pendingIds,
+            CustomerCode = string.IsNullOrWhiteSpace(_customer.Code) ? null : _customer.Code,
+            CustomerDisplayName = string.IsNullOrWhiteSpace(_customer.DisplayName) ? null : _customer.DisplayName,
+            CustomerProfilePath = string.IsNullOrWhiteSpace(_customer.ProfilePath) ? null : _customer.ProfilePath,
+            SharePointConfigured = sharePointConfigured,
+            SharePointSiteCount = sharePointSiteCount,
             KeyVaultConfigured = keyVaultConfigured,
             KeyVaultUri = keyVaultUri,
             Items = items,
             PlannerLive = plannerStatus,
+            TenantProfile = tenantProfile,
             AccessDenialsLast24Hours = denials24h,
             AccessAuditsLast24Hours = audits24h,
             AclVerificationGuidance = denials24h > 0
                 ? $"ACL is logging denials ({denials24h} in 24h). Review Recent access audits — denied rows confirm trimming works."
                 : audits24h > 0
                     ? "Audits are flowing; no denials in 24h (users may only hit allowed docs, or EnforceAcl is off)."
-                    : "After EnforceAcl cutover, exercise chat/search as a non-owner user and confirm deny rows appear when expected."
+                    : "After EnforceAcl cutover, exercise chat/search as a non-owner user and confirm deny rows appear when expected.",
+            GoLiveGuidance = goLiveReady
+                ? "All checklist items complete — cleared for go-live demo."
+                : $"Complete {pendingIds.Count} pending item(s) before go-live: {string.Join(", ", pendingIds)}. Run docs/azure/Test-CutoverChecklist.ps1"
         });
     }
 
     private static TenantCutoverItem Item(
-        string id, string label, bool complete, string detail, string? action) =>
+        string id, string label, bool complete, string detail, string? action, bool goLiveRequired = true) =>
         new()
         {
             Id = id,
@@ -280,7 +328,8 @@ public class AdminController : ControllerBase
             Complete = complete,
             Status = complete ? "complete" : "pending",
             Detail = detail,
-            Action = action
+            Action = action,
+            GoLiveRequired = goLiveRequired
         };
 
     [HttpGet("slo")]
@@ -304,5 +353,40 @@ public class AdminController : ControllerBase
                 zeroUnauthorizedCitations = true
             }
         });
+    }
+
+    [HttpPost("capacity/import")]
+    [ProducesResponseType(typeof(CapacityImportResult), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CapacityImportResult>> ImportCapacity(
+        IFormFile file,
+        CancellationToken ct = default)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest("CSV file is required.");
+        }
+
+        await using var stream = file.OpenReadStream();
+        return Ok(await _capacityImport.ImportCsvAsync(stream, ct));
+    }
+
+    [HttpGet("onboarding")]
+    [ProducesResponseType(typeof(PartnerOnboardingProfile), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PartnerOnboardingProfile>> GetOnboarding(CancellationToken ct)
+        => Ok(await _onboarding.GetProfileAsync(ct));
+
+    [HttpPost("onboarding")]
+    [ProducesResponseType(typeof(PartnerOnboardingProfile), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PartnerOnboardingProfile>> SaveOnboarding(
+        [FromBody] PartnerOnboardingProfile profile,
+        CancellationToken ct = default)
+        => Ok(await _onboarding.SaveProfileAsync(profile, ct));
+
+    [HttpGet("onboarding/teams-manifest")]
+    [Produces("application/json")]
+    public async Task<IActionResult> TeamsManifest(CancellationToken ct)
+    {
+        var manifest = await _onboarding.GenerateTeamsManifestAsync(ct);
+        return File(System.Text.Encoding.UTF8.GetBytes(manifest), "application/json", "bd-copilot-manifest.json");
     }
 }

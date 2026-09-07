@@ -1,5 +1,5 @@
 import { CUSTOM_ELEMENTS_SCHEMA, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -10,10 +10,14 @@ import {
   ProjectManagerInsight,
   StakeholderWeeklyReport,
   PlannerBurndownPoint,
-  UnifiedIntelligenceResponse
+  UnifiedIntelligenceResponse,
+  PlannerCapacityHeatmap,
+  PlannerStalledAlert,
+  DeliveryCrossLinkResponse,
+  PipelineCapacityView
 } from '../../core/models/api-models';
 
-type PiView = 'overview' | 'gantt' | 'timeline' | 'workload' | 'insights' | 'burndown' | 'unified';
+type PiView = 'overview' | 'gantt' | 'timeline' | 'workload' | 'capacity' | 'stalled' | 'fusion' | 'insights' | 'burndown' | 'unified' | 'pipeline';
 
 interface GanttRow {
   task: PlannerTaskListItem;
@@ -35,7 +39,7 @@ interface TimelineMarker {
 @Component({
   selector: 'app-project-intelligence',
   templateUrl: './project-intelligence.html',
-  imports: [DatePipe],
+  imports: [DatePipe, DecimalPipe],
   schemas: [CUSTOM_ELEMENTS_SCHEMA]
 })
 export class ProjectIntelligence implements OnInit {
@@ -52,6 +56,10 @@ export class ProjectIntelligence implements OnInit {
   protected readonly reportBusy = signal(false);
   protected readonly burndown = signal<PlannerBurndownPoint[]>([]);
   protected readonly unified = signal<UnifiedIntelligenceResponse | null>(null);
+  protected readonly capacity = signal<PlannerCapacityHeatmap | null>(null);
+  protected readonly stalledAlerts = signal<PlannerStalledAlert[]>([]);
+  protected readonly crossLinks = signal<DeliveryCrossLinkResponse | null>(null);
+  protected readonly pipeline = signal<PipelineCapacityView | null>(null);
   protected readonly unifiedBusy = signal(false);
   protected readonly unifiedQuery = signal('');
   protected readonly loading = signal(true);
@@ -91,6 +99,18 @@ export class ProjectIntelligence implements OnInit {
     }
     if (v === 'burndown' && this.burndown().length === 0) {
       this.loadBurndown();
+    }
+    if (v === 'capacity' && !this.capacity()) {
+      this.loadCapacity();
+    }
+    if (v === 'stalled' && this.stalledAlerts().length === 0) {
+      this.loadStalledAlerts();
+    }
+    if (v === 'fusion' && !this.crossLinks()) {
+      this.loadCrossLinks();
+    }
+    if (v === 'pipeline' && !this.pipeline()) {
+      this.loadPipeline();
     }
   }
 
@@ -151,6 +171,25 @@ export class ProjectIntelligence implements OnInit {
     return Math.max(...rows.map(r => r.completed), 1);
   }
 
+  protected capacityCell(assignee: string, weekStart: string) {
+    return this.capacity()?.cells.find(
+      c => c.assignee === assignee && c.weekStart === weekStart
+    );
+  }
+
+  protected heatClass(level: string): string {
+    switch (level) {
+      case 'Critical': return 'pi-heat--critical';
+      case 'High': return 'pi-heat--high';
+      case 'Medium': return 'pi-heat--medium';
+      default: return 'pi-heat--low';
+    }
+  }
+
+  protected formatWeek(iso: string): string {
+    return new Date(iso).toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  }
+
   protected sync(): void {
     this.syncBusy.set(true);
     this.api.syncPlanner().subscribe({
@@ -169,7 +208,9 @@ export class ProjectIntelligence implements OnInit {
 
   private applyQueryParams(q: { get(name: string): string | null }): void {
     const view = (q.get('view') || '').toLowerCase();
-    if (view === 'gantt' || view === 'timeline' || view === 'workload' || view === 'overview' || view === 'insights' || view === 'burndown' || view === 'unified') {
+    if (view === 'gantt' || view === 'timeline' || view === 'workload' || view === 'overview'
+        || view === 'insights' || view === 'burndown' || view === 'unified'
+        || view === 'capacity' || view === 'stalled' || view === 'fusion' || view === 'pipeline') {
       this.view.set(view);
     }
     this.delayedOnly.set(q.get('delayedOnly') === 'true' || q.get('delayedOnly') === '1');
@@ -210,6 +251,7 @@ export class ProjectIntelligence implements OnInit {
         if (this.view() === 'workload') this.loadWorkload();
         if (this.view() === 'insights') this.loadInsights();
         if (this.view() === 'burndown') this.loadBurndown();
+        this.loadStalledAlerts();
       },
       error: err => {
         console.error(err);
@@ -260,6 +302,53 @@ export class ProjectIntelligence implements OnInit {
   private loadBurndown(): void {
     this.api.getPlannerBurndown(30).subscribe({
       next: rows => this.burndown.set(rows),
+      error: err => console.error(err)
+    });
+  }
+
+  private loadCapacity(): void {
+    this.api.getPlannerCapacity(6).subscribe({
+      next: h => this.capacity.set(h),
+      error: err => console.error(err)
+    });
+  }
+
+  private loadStalledAlerts(): void {
+    this.api.getPlannerStalledAlerts(7).subscribe({
+      next: rows => this.stalledAlerts.set(rows),
+      error: err => console.error(err)
+    });
+  }
+
+  private loadCrossLinks(refresh = false): void {
+    this.api.getDeliveryCrossLinks('web-project-intelligence', 8, refresh).subscribe({
+      next: r => this.crossLinks.set(r),
+      error: err => console.error(err)
+    });
+  }
+
+  private loadPipeline(): void {
+    this.api.getPipelineCapacity().subscribe({
+      next: p => this.pipeline.set(p),
+      error: err => {
+        console.error(err);
+        this.toast.show('Could not load pipeline vs capacity view.');
+      }
+    });
+  }
+
+  protected refreshFusion(): void {
+    this.crossLinks.set(null);
+    this.loadCrossLinks(true);
+  }
+
+  protected crossLinkFeedback(linkId: string, action: 'Upvote' | 'Downvote'): void {
+    this.api.submitCrossLinkFeedback({
+      linkId,
+      userObjectId: 'web-project-intelligence',
+      action
+    }).subscribe({
+      next: () => this.loadCrossLinks(false),
       error: err => console.error(err)
     });
   }
