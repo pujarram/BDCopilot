@@ -57,17 +57,32 @@
         <span class="search-answer__meta">{{ modelLabel() }}</span>
       }
     </header>
-    <p class="search-answer__body">{{ ans }}</p>
+    <p class="search-answer__body">
+      <app-ai-stream-text [text]="ans" [animate]="true" />
+    </p>
     @if (citations().length) {
-      <div class="citations">
+      <div class="source-list" role="list" [attr.aria-label]="'Sources (' + citations().length + ')'">
+        <div class="source-list__title">Sources ({{ citations().length }})</div>
         @for (c of citations(); track c.documentId + (c.locator ?? '')) {
-          <button
-            type="button"
-            class="cite cite--btn"
-            (click)="openCitation(c)"
-            [attr.title]="c.sharePointUrl ? 'Open source' : c.fileName">
-            📎 {{ c.fileName }}{{ c.locator ? ' · ' + c.locator : '' }}
-          </button>
+          <article class="source-item" role="listitem">
+            @if (citationUrl(c); as url) {
+              <a
+                class="source-item__link"
+                [href]="url"
+                target="_blank"
+                rel="noopener noreferrer"
+                [attr.title]="'Open ' + c.fileName">
+                {{ c.fileName }}@if (c.locator) { · {{ c.locator }} }
+              </a>
+            } @else {
+              <button type="button" class="source-item__link source-item__link--btn" (click)="openCitation(c)">
+                {{ c.fileName }}@if (c.locator) { · {{ c.locator }} }
+              </button>
+            }
+            @if (c.snippet) {
+              <p class="source-item__snippet">&ldquo;{{ c.snippet }}&rdquo;</p>
+            }
+          </article>
         }
       </div>
     }

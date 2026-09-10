@@ -41,14 +41,7 @@ public class VectorSearchService : IVectorSearchService
             .Include(c => c.Document)
             .Where(c => c.Embedding != null);
 
-        chunks = source switch
-        {
-            CorpusSources.Local => chunks.Where(c => c.Document!.GraphDriveId == CorpusSources.LocalDriveId),
-            CorpusSources.Online => chunks.Where(c => CorpusSources.IsOnlineDocument(c.Document!)),
-            CorpusSources.Planner => chunks.Where(c => c.Document!.GraphDriveId == CorpusSources.PlannerDriveId),
-            CorpusSources.Battlecards => chunks.Where(c => c.Document!.GraphDriveId == CorpusSources.BattlecardsDriveId),
-            _ => chunks
-        };
+        chunks = chunks.ApplyCorpusFilter(source);
 
         // Over-fetch before ACL filtering so a few restricted hits don't leave the caller
         // with fewer than topK usable results.

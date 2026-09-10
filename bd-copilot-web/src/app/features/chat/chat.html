@@ -20,11 +20,34 @@
     <div class="msg" [class.user]="msg.role === 'user'" [class.ai]="msg.role === 'assistant'">
       <div class="avatar">{{ msg.role === 'user' ? 'You' : 'AI' }}</div>
       <div class="bubble">
-        {{ msg.text }}
+        @if (msg.role === 'assistant') {
+          <p class="bubble__text">
+            <app-ai-stream-text [text]="msg.text" [animate]="!!msg.animate" />
+          </p>
+        } @else {
+          <p class="bubble__text">{{ msg.text }}</p>
+        }
         @if (msg.citations && msg.citations.length) {
-          <div class="citations">
+          <div class="source-list" role="list" [attr.aria-label]="'Sources (' + msg.citations.length + ')'">
+            <div class="source-list__title">Sources ({{ msg.citations.length }})</div>
             @for (c of msg.citations; track c.documentId + (c.locator ?? '')) {
-              <span class="cite">📎 {{ c.fileName }}{{ c.locator ? ' · ' + c.locator : '' }}</span>
+              <article class="source-item" role="listitem">
+                @if (citationUrl(c); as url) {
+                  <a
+                    class="source-item__link"
+                    [href]="url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    [attr.title]="'Open ' + c.fileName">
+                    {{ c.fileName }}@if (c.locator) { · {{ c.locator }} }
+                  </a>
+                } @else {
+                  <span class="source-item__name">{{ c.fileName }}@if (c.locator) { · {{ c.locator }} }</span>
+                }
+                @if (c.snippet) {
+                  <p class="source-item__snippet">&ldquo;{{ c.snippet }}&rdquo;</p>
+                }
+              </article>
             }
           </div>
         }

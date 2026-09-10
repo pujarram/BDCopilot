@@ -15,11 +15,16 @@ public class AuthController : ControllerBase
 {
     private readonly AdminUserSettings _settings;
     private readonly AzureAdSettings _azureAd;
+    private readonly TeamsBotSettings _teamsBot;
 
-    public AuthController(IOptions<AdminUserSettings> settings, IOptions<AzureAdSettings> azureAd)
+    public AuthController(
+        IOptions<AdminUserSettings> settings,
+        IOptions<AzureAdSettings> azureAd,
+        IOptions<TeamsBotSettings> teamsBot)
     {
         _settings = settings.Value;
         _azureAd = azureAd.Value;
+        _teamsBot = teamsBot.Value;
     }
 
     /// <summary>Pilot admin login — disabled in production when AllowPilotAdminLogin is false.</summary>
@@ -76,25 +81,72 @@ public class AuthController : ControllerBase
     [HttpGet("config")]
     public ActionResult<object> Config()
     {
-        var entraConfigured = !string.IsNullOrWhiteSpace(_azureAd.TenantId)
-                              && !string.IsNullOrWhiteSpace(_azureAd.ClientId);
-        var spaClientId = string.IsNullOrWhiteSpace(_azureAd.SpaClientId)
-            ? _azureAd.ClientId
-            : _azureAd.SpaClientId;
+        var hasTenant = !string.IsNullOrWhiteSpace(_azureAd.TenantId);
+        var hasApiClient = !string.IsNullOrWhiteSpace(_azureAd.ClientId);
+        var hasSpaClient = !string.IsNullOrWhiteSpace(_azureAd.SpaClientId);
+        var spaClientId = hasSpaClient ? _azureAd.SpaClientId : _azureAd.ClientId;
+        var entraConfigured = hasTenant && !string.IsNullOrWhiteSpace(spaClientId);
+        var spaFallsBackToApiClient = entraConfigured && !hasSpaClient;
         var apiScope = string.IsNullOrWhiteSpace(_azureAd.ApiScope)
-            ? (entraConfigured ? $"api://{_azureAd.ClientId}/access_as_user" : null)
+            ? (hasApiClient ? $"api://{_azureAd.ClientId}/access_as_user" : null)
             : _azureAd.ApiScope;
+
+        var setupHints = new List<string>();
+        if (!entraConfigured)
+        {
+            setupHints.Add("Set AzureAd:TenantId and AzureAd:SpaClientId (SPA app registration) in appsettings or user-secrets.");
+        }
+        else
+        {
+            if (spaFallsBackToApiClient)
+            {
+                setupHints.Add(
+                    "AzureAd:SpaClientId is empty — MSAL is using AzureAd:ClientId. " +
+                    "Create a separate SPA app registration (platform: Single-page application) and set SpaClientId. " +
+                    "Do not use the Azure Bot / TeamsBot MicrosoftAppId as the SPA client.");
+            }
+
+            var botId = _teamsBot.MicrosoftAppId?.Trim();
+            if (!string.IsNullOrWhiteSpace(botId))
+            {
+                if (string.Equals(spaClientId, botId, StringComparison.OrdinalIgnoreCase))
+                {
+                    setupHints.Insert(0,
+                        "MSAL clientId matches TeamsBot:MicrosoftAppId (Azure Bot). " +
+                        "That app is not a SPA — Sign in with Microsoft will fail. " +
+                        "Set AzureAd:SpaClientId to your SPA/Graph app (redirect URI http://localhost:4200/login) " +
+                        "and clear any user-secret/env override that sets AzureAd:ClientId to the Bot App Id.");
+                }
+                else if (hasApiClient
+                         && string.Equals(_azureAd.ClientId, botId, StringComparison.OrdinalIgnoreCase))
+                {
+                    setupHints.Insert(0,
+                        "AzureAd:ClientId matches TeamsBot:MicrosoftAppId. " +
+                        "Point ClientId/ApiScope at the API app registration, not the Bot.");
+                }
+            }
+
+            setupHints.Add(
+                "In Entra → SPA app → Authentication → add redirect URI exactly: " +
+                "http://localhost:4200/login (and your production https://…/login).");
+            setupHints.Add(
+                "Expose API scope on the API app (AzureAd:ClientId), e.g. api://{ClientId}/access_as_user, " +
+                "then grant that permission to the SPA app and admin-consent.");
+        }
 
         return Ok(new
         {
             entraEnabled = entraConfigured,
             tenantId = entraConfigured ? _azureAd.TenantId : null,
             clientId = entraConfigured ? spaClientId : null,
-            apiClientId = entraConfigured ? _azureAd.ClientId : null,
-            apiScope,
+            apiClientId = hasApiClient ? _azureAd.ClientId : null,
+            apiScope = entraConfigured ? apiScope : null,
             authority = entraConfigured
                 ? $"{_azureAd.Instance.TrimEnd('/')}/{_azureAd.TenantId}"
                 : null,
+            redirectUri = "/login",
+            spaFallsBackToApiClient,
+            setupHints,
             enforceAcl = _azureAd.EnforceAcl,
             requireAuthOnApi = _azureAd.RequireAuthOnApi,
             allowPilotAdminLogin = _azureAd.AllowPilotAdminLogin

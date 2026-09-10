@@ -1,0 +1,105 @@
+@if (panelOpen()) {
+  <div class="copilot-panel-backdrop" (click)="close()" aria-hidden="true"></div>
+  <aside class="copilot-panel" role="dialog" aria-label="BD Copilot chat">
+    <header class="copilot-panel__head">
+      <div>
+        <strong>BD Copilot</strong>
+        <span class="copilot-panel__sub">Grounded on indexed documents</span>
+      </div>
+      <div class="copilot-panel__actions">
+        <button
+          type="button"
+          class="copilot-panel__icon-btn"
+          [class.is-active]="readAloud()"
+          (click)="toggleReadAloud()"
+          [attr.title]="readAloud() ? 'Read-aloud on' : 'Read-aloud off'"
+          aria-label="Toggle read aloud">
+          🔊
+        </button>
+        <button type="button" class="copilot-panel__icon-btn" (click)="clearChat()" title="Clear chat" aria-label="Clear chat">
+          ↺
+        </button>
+        <button type="button" class="copilot-panel__icon-btn" (click)="close()" aria-label="Close chat">
+          ✕
+        </button>
+      </div>
+    </header>
+
+    @if (errorMessage()) {
+      <div class="copilot-panel__error">{{ errorMessage() }}</div>
+    }
+    @if (voiceError()) {
+      <div class="copilot-panel__error">{{ voiceError() }}</div>
+    }
+
+    <div class="copilot-panel__log" #logEl>
+      @if (messages().length === 0 && !asking()) {
+        <p class="copilot-panel__hint">Ask about RFPs, proposals, or SharePoint content. Answers include clickable source links.</p>
+      }
+
+      @for (msg of messages(); track $index) {
+        <div class="copilot-panel__msg" [class.user]="msg.role === 'user'" [class.ai]="msg.role === 'assistant'">
+          @if (msg.role === 'assistant') {
+            <p class="bubble__text">
+              <app-ai-stream-text
+                [text]="msg.text"
+                [animate]="$index === messages().length - 1" />
+            </p>
+          } @else {
+            <p class="bubble__text">{{ msg.text }}</p>
+          }
+          @if (msg.citations && msg.citations.length) {
+            <div class="source-list" role="list">
+              <div class="source-list__title">Sources ({{ msg.citations.length }})</div>
+              @for (c of msg.citations; track c.documentId + (c.locator ?? '') + c.fileName) {
+                <article class="source-item" role="listitem">
+                  @if (citationUrl(c); as url) {
+                    <a class="source-item__link" [href]="url" target="_blank" rel="noopener noreferrer">
+                      {{ c.fileName }}@if (c.locator) { · {{ c.locator }} }
+                    </a>
+                  } @else {
+                    <span class="source-item__name">{{ c.fileName }}</span>
+                  }
+                  @if (c.snippet) {
+                    <p class="source-item__snippet">&ldquo;{{ c.snippet }}&rdquo;</p>
+                  }
+                </article>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      @if (asking()) {
+        <div class="copilot-panel__msg ai">
+          <p class="copilot-panel__thinking">Searching documents…</p>
+        </div>
+      }
+    </div>
+
+    <footer class="copilot-panel__composer">
+      @if (voiceSupported()) {
+        <button
+          type="button"
+          class="copilot-panel__mic"
+          [class.is-listening]="listening()"
+          (click)="startVoice()"
+          [attr.aria-label]="listening() ? 'Stop listening' : 'Speak question'">
+          🎤
+        </button>
+      }
+      <fluent-text-input
+        class="copilot-panel__input"
+        placeholder="Ask a question…"
+        [attr.value]="draft()"
+        (input)="onInput($event)"
+        (keydown)="onKeydown($event)">
+      </fluent-text-input>
+      <fluent-button appearance="accent" [attr.disabled]="asking() ? true : null" (click)="send()">Send</fluent-button>
+    </footer>
+
+    <p class="copilot-panel__footer-link">
+      <a routerLink="/chat" (click)="close()">Open full chat</a>
+    </p>
+  </aside>
+}

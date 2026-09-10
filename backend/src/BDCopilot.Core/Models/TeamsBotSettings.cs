@@ -31,6 +31,11 @@ public class TeamsBotSettings
     /// </summary>
     public string WebBaseUrl { get; set; } = "https://YOUR-NGROK-4200.ngrok-free.app";
 
+    /// <summary>
+    /// Public base URL for BDCopilot.Api (ngrok to :5154). Used for document open links in bot Sources.
+    /// </summary>
+    public string ApiBaseUrl { get; set; } = "http://localhost:5154";
+
     /// <summary>User object id used for RAG when Teams SSO is not yet wired.</summary>
     public string FallbackUserObjectId { get; set; } = "demo-user-0000-0000-0000-000000000000";
 }

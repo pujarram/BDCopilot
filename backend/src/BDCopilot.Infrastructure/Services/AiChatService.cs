@@ -22,6 +22,7 @@ public class AiChatService : IAiChatService
 
     private readonly ISemanticKernelFactory _kernelFactory;
     private readonly IVectorSearchService _vectorSearch;
+    private readonly IChannelLiveDocumentService _channelLive;
     private readonly ITokenUsageTracker _tokenUsage;
     private readonly AiSettings _settings;
     private readonly ILogger<AiChatService> _logger;
@@ -29,12 +30,14 @@ public class AiChatService : IAiChatService
     public AiChatService(
         ISemanticKernelFactory kernelFactory,
         IVectorSearchService vectorSearch,
+        IChannelLiveDocumentService channelLive,
         ITokenUsageTracker tokenUsage,
         IOptions<AiSettings> settings,
         ILogger<AiChatService> logger)
     {
         _kernelFactory = kernelFactory;
         _vectorSearch = vectorSearch;
+        _channelLive = channelLive;
         _tokenUsage = tokenUsage;
         _settings = settings.Value;
         _logger = logger;
@@ -52,6 +55,37 @@ public class AiChatService : IAiChatService
             // Retrieval failures should not hard-fail chat — answer without citations.
             _logger.LogWarning(ex, "Vector search failed for chat; continuing without sources.");
             hits = [];
+        }
+
+        if (request.IncludeChannelLiveSearch)
+        {
+            try
+            {
+                var live = await _channelLive.SearchLiveChannelAsync(
+                    request.Message, request.UserObjectId, ct);
+                hits = MergeHits(hits, live);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Live channel search failed; using indexed corpus only.");
+            }
+        }
+
+        if (hits.Count == 0 && string.IsNullOrWhiteSpace(request.ExtraContext))
+        {
+            var model = _settings.Provider == "AzureOpenAI"
+                ? _settings.AzureOpenAI.ChatDeployment
+                : _settings.Ollama.ChatModel;
+            return new ChatResponse
+            {
+                Answer =
+                    "I couldn't find any indexed documents matching your question in the corpus I can access. " +
+                    "Try rephrasing, pick a broader phrase, or confirm SharePoint/local sync has indexed the relevant " +
+                    "DOCX, PDF, PPTX, or XLSX files (Document Library → sync health).",
+                Citations = [],
+                AiProvider = _settings.Provider,
+                Model = model
+            };
         }
 
         var system = string.IsNullOrWhiteSpace(request.ExtraContext)
@@ -181,7 +215,7 @@ public class AiChatService : IAiChatService
             return new ChatResponse
             {
                 Answer = reply.Content ?? string.Empty,
-                Citations = hits.Select(h => h.Source).ToList(),
+                Citations = DedupeCitations(hits),
                 AiProvider = _settings.Provider,
                 Model = model
             };
@@ -256,5 +290,37 @@ public class AiChatService : IAiChatService
             i++;
         }
         return sb.ToString();
+    }
+
+    private static List<Citation> DedupeCitations(IEnumerable<SearchResultItem> hits) =>
+        hits.Select(h => h.Source)
+            .GroupBy(c => $"{c.FileName}|{c.Locator ?? ""}|{c.SharePointUrl}")
+            .Select(g => g.First())
+            .ToList();
+
+    private static List<SearchResultItem> MergeHits(
+        IReadOnlyList<SearchResultItem> indexed,
+        IReadOnlyList<SearchResultItem> live)
+    {
+        if (live.Count == 0)
+        {
+            return indexed.ToList();
+        }
+
+        var merged = indexed.ToList();
+        var seen = new HashSet<string>(
+            merged.Select(h => $"{h.Source.FileName}|{h.Source.SharePointUrl}"),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var hit in live)
+        {
+            var key = $"{hit.Source.FileName}|{hit.Source.SharePointUrl}";
+            if (seen.Add(key))
+            {
+                merged.Add(hit);
+            }
+        }
+
+        return merged.OrderByDescending(h => h.Score).Take(8).ToList();
     }
 }

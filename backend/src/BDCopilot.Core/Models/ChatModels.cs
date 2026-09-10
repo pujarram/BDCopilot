@@ -15,6 +15,12 @@ public class ChatRequest
     /// (Teams bot Project Intelligence NL).
     /// </summary>
     public string? ExtraContext { get; set; }
+
+    /// <summary>
+    /// When true (Teams bot), also search the configured channel document library live via Graph
+    /// in addition to the indexed corpus.
+    /// </summary>
+    public bool IncludeChannelLiveSearch { get; set; }
 }
 
 public class ChatTurn

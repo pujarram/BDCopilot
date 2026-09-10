@@ -119,6 +119,7 @@ builder.Services.AddScoped<IDocumentParserRouter, DocumentParserRouter>();
 builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
 builder.Services.AddScoped<IAccessAuditService, AccessAuditService>();
 builder.Services.AddScoped<IAccessControlService, AccessControlService>();
+builder.Services.AddScoped<IChannelLiveDocumentService, ChannelLiveDocumentService>();
 builder.Services.AddBdCopilotVectorSearch(builder.Configuration);
 builder.Services.AddScoped<IAiChatService, AiChatService>();
 builder.Services.AddScoped<IDocumentGeneratorService, DocumentGeneratorService>();

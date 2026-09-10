@@ -175,6 +175,78 @@ public static class TeamsAdaptiveCardBuilder
         };
     }
 
+    /// <summary>Adaptive Card for grounded chat/search answers with openable source links.</summary>
+    public static JsonObject? GroundedSourcesCard(
+        string answerPreview,
+        IReadOnlyList<Citation> citations,
+        string apiBaseUrl,
+        string userObjectId,
+        string? chatTabUrl = null)
+    {
+        if (citations.Count == 0)
+        {
+            return null;
+        }
+
+        var body = new JsonArray
+        {
+            TextBlock("BD Copilot answer", "Large", true),
+            TextBlock(Truncate(answerPreview, 420), "Default", false),
+            TextBlock("Sources", "Medium", true)
+        };
+
+        foreach (var c in citations.Take(4))
+        {
+            var label = CitationOpenUrl.FormatLabel(c);
+            var snippet = string.IsNullOrWhiteSpace(c.Snippet) ? null : Truncate(c.Snippet, 160);
+            body.Add(FactSet(
+                (label, snippet ?? "Open indexed source")));
+        }
+
+        if (citations.Count > 4)
+        {
+            body.Add(TextBlock($"+ {citations.Count - 4} more in chat", "Small"));
+        }
+
+        var actions = new JsonArray();
+        foreach (var c in citations.Take(3))
+        {
+            var url = CitationOpenUrl.Resolve(c, apiBaseUrl, userObjectId);
+            if (url is null) continue;
+            var title = Truncate(c.FileName, 28);
+            actions.Add(new JsonObject
+            {
+                ["type"] = "Action.OpenUrl",
+                ["title"] = $"Open {title}",
+                ["url"] = url
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(chatTabUrl))
+        {
+            actions.Add(new JsonObject
+            {
+                ["type"] = "Action.OpenUrl",
+                ["title"] = "Open BD Copilot",
+                ["url"] = chatTabUrl
+            });
+        }
+
+        if (actions.Count == 0)
+        {
+            return null;
+        }
+
+        return new JsonObject
+        {
+            ["type"] = "AdaptiveCard",
+            ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
+            ["version"] = "1.5",
+            ["body"] = body,
+            ["actions"] = actions
+        };
+    }
+
     private static JsonObject TextBlock(string text, string size, bool bold = false) =>
         new()
         {

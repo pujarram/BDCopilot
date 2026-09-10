@@ -59,14 +59,6 @@ export class PrototypeShell {
         { path: '/admin', label: 'Admin Console', icon: 'admin' },
         { path: '/settings', label: 'Settings', icon: 'settings' }
       ]
-    },
-    {
-      title: 'Docs',
-      items: [
-        { path: '/architecture', label: 'Architecture', icon: 'architecture' },
-        { path: '/stack', label: 'Tech Stack', icon: 'stack' },
-        { path: '/roadmap', label: 'Roadmap', icon: 'roadmap' }
-      ]
     }
   ];
 

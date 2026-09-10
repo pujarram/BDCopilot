@@ -18,6 +18,7 @@ export interface ChatRequest {
   message: string;
   history: ChatTurn[];
   userObjectId: string;
+  includeChannelLiveSearch?: boolean;
 }
 
 export interface ChatResponse {
@@ -652,6 +653,9 @@ export interface AuthConfig {
   apiClientId?: string | null;
   apiScope?: string | null;
   authority?: string | null;
+  redirectUri?: string | null;
+  spaFallsBackToApiClient?: boolean;
+  setupHints?: string[];
   enforceAcl: boolean;
   requireAuthOnApi: boolean;
   allowPilotAdminLogin?: boolean;

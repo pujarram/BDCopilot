@@ -84,7 +84,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
                 || text.StartsWith("find ", StringComparison.OrdinalIgnoreCase))
             {
                 var query = text.Contains(' ') ? text[(text.IndexOf(' ') + 1)..].Trim() : text;
-                return [new TeamsReply { Text = await SearchAsync(query, userObjectId, ct) }];
+                return [await SearchAsync(query, userObjectId, ct)];
             }
 
             if (text.StartsWith("rfp", StringComparison.OrdinalIgnoreCase)
@@ -100,7 +100,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
                 return [plannerReply];
             }
 
-            return [new TeamsReply { Text = await ChatAsync(text, userObjectId, extraContext: null, ct) }];
+            return [await ChatAsync(text, userObjectId, extraContext: null, ct)];
         }
         catch (Exception ex)
         {
@@ -243,8 +243,9 @@ public sealed class TeamsChannelService : ITeamsChannelService
         if (LooksLikeProjectIntent(lower))
         {
             var snapshot = await BuildPlannerSnapshotAsync(ct);
-            var answer = await ChatAsync(text, userObjectId, snapshot, ct);
-            return Reply(answer + $"\n\nOpen dashboard: {TabUrl("/projects")}");
+            var reply = await ChatAsync(text, userObjectId, snapshot, ct);
+            reply.Text += $"\n\nOpen dashboard: {TabUrl("/projects")}";
+            return reply;
         }
 
         return null;
@@ -452,55 +453,78 @@ public sealed class TeamsChannelService : ITeamsChannelService
         return sb.ToString();
     }
 
-    private async Task<string> ChatAsync(string message, string userObjectId, string? extraContext, CancellationToken ct)
+    private async Task<TeamsReply> ChatAsync(string message, string userObjectId, string? extraContext, CancellationToken ct)
     {
         var response = await _chat.AskAsync(new ChatRequest
         {
             Message = message,
             UserObjectId = userObjectId,
             History = [],
-            ExtraContext = extraContext
+            ExtraContext = extraContext,
+            IncludeChannelLiveSearch = true
         }, ct);
 
         var sb = new StringBuilder();
-        sb.AppendLine(response.Answer?.Trim() ?? "(no answer)");
+        sb.AppendLine(response.Answer?.Trim() ?? "I couldn't find relevant indexed content to answer that question.");
         if (response.Citations is { Count: > 0 })
         {
             sb.AppendLine();
             sb.AppendLine("**Sources**");
-            foreach (var c in response.Citations.Take(5))
+            var apiBase = ApiBaseUrl();
+            foreach (var c in response.Citations.Take(6))
             {
-                var locator = string.IsNullOrWhiteSpace(c.Locator) ? "" : $" · {c.Locator}";
-                sb.AppendLine($"• {c.FileName}{locator}");
+                sb.AppendLine(CitationOpenUrl.FormatMarkdownLink(c, apiBase, userObjectId));
+                if (!string.IsNullOrWhiteSpace(c.Snippet))
+                {
+                    sb.AppendLine($"  _{Truncate(c.Snippet, 160)}_");
+                }
+            }
+
+            if (response.Citations.Count > 6)
+            {
+                sb.AppendLine($"_…and {response.Citations.Count - 6} more in the BD Copilot tab._");
             }
         }
 
         sb.AppendLine();
         sb.AppendLine($"_Model: {response.AiProvider}/{response.Model}_");
-        return sb.ToString();
+
+        var card = TeamsAdaptiveCardBuilder.GroundedSourcesCard(
+            response.Answer ?? "",
+            response.Citations ?? [],
+            ApiBaseUrl(),
+            userObjectId,
+            TabUrl("/chat"));
+
+        return Reply(sb.ToString(), card);
     }
 
-    private async Task<string> SearchAsync(string query, string userObjectId, CancellationToken ct)
+    private async Task<TeamsReply> SearchAsync(string query, string userObjectId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(query))
         {
-            return "Usage: `search <keywords>` — e.g. `search wealth management RFP`";
+            return Reply("Usage: `search <keywords>` — e.g. `search wealth management RFP`");
         }
 
         var hits = await _search.SearchAsync(query, userObjectId, topK: 6, ct: ct);
         if (hits.Count == 0)
         {
-            return $"No indexed documents matched **{query}**. Run SharePoint sync from the Library tab, then try again.";
+            return Reply(
+                $"No indexed documents matched **{query}**. Run SharePoint sync from the Library tab, then try again.");
         }
 
+        var apiBase = ApiBaseUrl();
         var sb = new StringBuilder();
         sb.AppendLine($"**Search results for** _{query}_");
         sb.AppendLine();
         var i = 1;
         foreach (var hit in hits)
         {
-            var locator = string.IsNullOrWhiteSpace(hit.Source.Locator) ? "" : $" · {hit.Source.Locator}";
-            sb.AppendLine($"{i}. **{hit.Source.FileName}**{locator} (score {hit.Score:0.###})");
+            var label = CitationOpenUrl.FormatLabel(hit.Source);
+            var url = CitationOpenUrl.Resolve(hit.Source, apiBase, userObjectId);
+            sb.AppendLine(url is null
+                ? $"{i}. **{label}** (score {hit.Score:0.###})"
+                : $"{i}. [{label}]({url}) (score {hit.Score:0.###})");
             if (!string.IsNullOrWhiteSpace(hit.Excerpt))
             {
                 sb.AppendLine($"   {Truncate(hit.Excerpt, 180)}");
@@ -511,7 +535,15 @@ public sealed class TeamsChannelService : ITeamsChannelService
 
         sb.AppendLine();
         sb.AppendLine($"Open full UI: {TabUrl("/search")}");
-        return sb.ToString();
+
+        var card = TeamsAdaptiveCardBuilder.GroundedSourcesCard(
+            $"Top matches for \"{query}\"",
+            hits.Select(h => h.Source).ToList(),
+            apiBase,
+            userObjectId,
+            TabUrl("/search"));
+
+        return Reply(sb.ToString(), card);
     }
 
     private string BuildWelcome() =>
@@ -564,6 +596,17 @@ public sealed class TeamsChannelService : ITeamsChannelService
         }
 
         return $"{baseUrl}{path}";
+    }
+
+    private string ApiBaseUrl()
+    {
+        var url = (_settings.ApiBaseUrl ?? "").TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return "http://localhost:5154";
+        }
+
+        return url;
     }
 
     private static string FormatTaskList(string heading, IReadOnlyList<PlannerTaskListItem> tasks, string dashboardUrl)

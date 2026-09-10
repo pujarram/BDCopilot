@@ -22,6 +22,8 @@ export class Login implements OnInit {
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly entraEnabled = this.auth.entraEnabled;
   protected readonly allowPilot = this.auth.allowPilotAdminLogin;
+  protected readonly setupHints = this.auth.setupHints;
+  protected readonly spaMisconfigured = this.auth.spaMisconfigured;
 
   ngOnInit(): void {
     this.auth.ensureConfigured().subscribe({
@@ -53,11 +55,20 @@ export class Login implements OnInit {
     });
   }
 
-  protected async signInWithMicrosoft(): Promise<void> {
+  protected async signInWithMicrosoft(event?: Event): Promise<void> {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (this.entraBusy()) return;
+
     this.entraBusy.set(true);
     this.errorMessage.set(null);
     try {
       await this.auth.loginWithMicrosoft();
+      // Redirect leaves the page; if we return, MSAL did not navigate.
+      this.entraBusy.set(false);
+      this.errorMessage.set(
+        'Microsoft sign-in did not redirect. Check the browser console and Entra SPA redirect URI (http://localhost:4200/login).'
+      );
     } catch (err: unknown) {
       console.error(err);
       this.entraBusy.set(false);

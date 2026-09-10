@@ -27,14 +27,22 @@
       </p>
 
       @if (entraEnabled()) {
-        <fluent-button
-          appearance="accent"
-          class="auth-card__submit"
-          [attr.disabled]="entraBusy() ? true : null"
-          (click)="signInWithMicrosoft()"
+        <button
+          type="button"
+          class="auth-card__ms-btn"
+          [disabled]="entraBusy()"
+          (click)="signInWithMicrosoft($event)"
         >
           {{ entraBusy() ? 'Redirecting to Microsoft…' : 'Sign in with Microsoft' }}
-        </fluent-button>
+        </button>
+      }
+
+      @if (spaMisconfigured()) {
+        <div class="error-banner auth-card__error auth-card__hint-block">
+          SPA client is falling back to the API/Bot app id. Set
+          <code>AzureAd:SpaClientId</code> to a dedicated SPA app registration (redirect URI
+          <code>http://localhost:4200/login</code>), then restart the API.
+        </div>
       }
 
       @if (allowPilot()) {
@@ -71,6 +79,14 @@
 
       @if (errorMessage()) {
         <div class="error-banner auth-card__error">{{ errorMessage() }}</div>
+      }
+
+      @if (setupHints().length && (spaMisconfigured() || errorMessage())) {
+        <ul class="auth-card__setup-hints">
+          @for (hint of setupHints(); track hint) {
+            <li>{{ hint }}</li>
+          }
+        </ul>
       }
     </div>
   </div>

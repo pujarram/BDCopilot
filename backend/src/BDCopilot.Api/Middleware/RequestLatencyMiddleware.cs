@@ -10,11 +10,17 @@ public sealed class RequestLatencyMiddleware
 
     public RequestLatencyMiddleware(RequestDelegate next)
     {
-        _next = next;
+        _next = next ?? throw new ArgumentNullException(nameof(next));
     }
 
     public async Task InvokeAsync(HttpContext context)
     {
+        if (context?.Request is null)
+        {
+            await _next(context!);
+            return;
+        }
+
         var path = context.Request.Path.Value ?? "";
         if (!path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)
             || path.StartsWith("/api/health", StringComparison.OrdinalIgnoreCase))
@@ -31,29 +37,36 @@ public sealed class RequestLatencyMiddleware
         finally
         {
             sw.Stop();
-            try
+            TrackLatency(context, path, sw.Elapsed.TotalMilliseconds);
+        }
+    }
+
+    private static void TrackLatency(HttpContext context, string path, double durationMs)
+    {
+        try
+        {
+            var telemetry = context.RequestServices?.GetService<TelemetryClient>();
+            if (telemetry is null)
             {
-                var telemetry = context.RequestServices.GetService<TelemetryClient>();
-                if (telemetry is not null)
+                return;
+            }
+
+            telemetry.TrackEvent(
+                "BdCopilot.ApiLatency",
+                new Dictionary<string, string>
                 {
-                    telemetry.TrackEvent(
-                        "BdCopilot.ApiLatency",
-                        new Dictionary<string, string>
-                        {
-                            ["Path"] = path,
-                            ["Method"] = context.Request.Method,
-                            ["StatusCode"] = context.Response.StatusCode.ToString()
-                        },
-                        new Dictionary<string, double>
-                        {
-                            ["DurationMs"] = sw.Elapsed.TotalMilliseconds
-                        });
-                }
-            }
-            catch
-            {
-                // Telemetry must never break the request pipeline.
-            }
+                    ["Path"] = path,
+                    ["Method"] = context.Request.Method ?? "GET",
+                    ["StatusCode"] = context.Response?.StatusCode.ToString() ?? "0"
+                },
+                new Dictionary<string, double>
+                {
+                    ["DurationMs"] = durationMs
+                });
+        }
+        catch
+        {
+            // Telemetry must never break the request pipeline.
         }
     }
 }

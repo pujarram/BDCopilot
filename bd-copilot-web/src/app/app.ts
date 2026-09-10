@@ -6,12 +6,12 @@ import { AuthService } from './core/services/auth.service';
 import { Toast } from './shell/toast/toast';
 import { MenuStateService } from './core/services/menu-state.service';
 import { TietoIconComponent } from './shared/tieto-icon.component';
-
-const DOC_PREFIXES = ['/architecture', '/stack', '/roadmap'];
+import { CopilotFab } from './shell/copilot-fab/copilot-fab';
+import { CopilotPanel } from './shell/copilot-panel/copilot-panel';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, Toast, TietoIconComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, Toast, TietoIconComponent, CopilotFab, CopilotPanel],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
@@ -23,7 +23,6 @@ export class App implements OnInit {
 
   protected readonly authService = this.auth;
   protected readonly menuOpen = this.menuState.open;
-  protected readonly isPrototypeRoute = signal(true);
   protected readonly isLoginRoute = signal(false);
 
   async ngOnInit(): Promise<void> {
@@ -63,6 +62,5 @@ export class App implements OnInit {
   private syncRoute(url: string): void {
     const path = url.split('?')[0];
     this.isLoginRoute.set(path === '/login');
-    this.isPrototypeRoute.set(!DOC_PREFIXES.some(p => path.startsWith(p)));
   }
 }

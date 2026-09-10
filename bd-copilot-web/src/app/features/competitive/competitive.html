@@ -42,8 +42,8 @@
   </div>
 </div>
 
-<fluent-button appearance="accent" [attr.disabled]="generating() ? true : null" (click)="generate()">
-  {{ generating() ? 'Generating…' : 'Generate competitive brief' }}
+<fluent-button appearance="accent" [attr.disabled]="generating() || streaming() ? true : null" (click)="generate()">
+  {{ generating() || streaming() ? 'Generating…' : 'Generate competitive brief' }}
 </fluent-button>
 
 @if (progressLabel()) {
@@ -53,16 +53,63 @@
   <div class="error-banner">{{ errorMessage() }}</div>
 }
 
-@if (result(); as doc) {
-  <section style="margin-top:1.25rem;">
-    <h3>{{ doc.title }}</h3>
-    <p class="pi-muted">Status: {{ doc.status }}</p>
-    @for (s of sections(); track s.order) {
-      <article style="margin:1rem 0;">
-        <h4>{{ s.title }}</h4>
-        <p style="white-space:pre-wrap;">{{ s.content }}</p>
+@if (streamSections().length) {
+  <div class="gen-stream" [class.gen-stream--live]="streaming() || generating()">
+    @for (section of streamSections(); track section.order) {
+      <article
+        class="gen-stream-card"
+        [class.is-queued]="section.status === 'queued' || section.status === 'writing-title'"
+        [class.is-generating]="section.status === 'generating'"
+        [class.is-done]="section.status === 'done'"
+        [class.is-error]="section.status === 'error'"
+      >
+        <header class="gen-stream-card__head">
+          <span class="gen-stream-card__n">{{ section.order.toString().padStart(2, '0') }}</span>
+          <h3 class="gen-stream-card__title">
+            {{ section.displayTitle || '…' }}
+            @if (section.status === 'generating') {
+              <span class="gen-caret" aria-hidden="true"></span>
+            }
+          </h3>
+          <span class="gen-stream-card__status">
+            @switch (section.status) {
+              @case ('queued') { Waiting }
+              @case ('writing-title') { Outlining }
+              @case ('generating') { Writing }
+              @case ('done') { Done }
+              @case ('error') { Failed }
+            }
+          </span>
+        </header>
+        @if (section.content || section.status === 'generating') {
+          <div class="gen-stream-card__body">
+            <p>{{ section.content }}@if (section.status === 'generating') {
+              <span class="gen-caret" aria-hidden="true"></span>
+            }</p>
+            @if (section.status === 'done' && section.sources.length) {
+              <div class="gen-stream-card__sources">
+                @for (src of section.sources.slice(0, 2); track src.fileName + (src.locator ?? '')) {
+                  <span class="src-chip">{{ src.fileName }}{{ src.locator ? ' · ' + src.locator : '' }}</span>
+                }
+              </div>
+            }
+          </div>
+        }
       </article>
     }
+  </div>
+}
+
+@if (result(); as doc) {
+  <section class="gen-output show" style="margin-top:1.25rem;">
+    <div class="gen-output-head">
+      <div class="doc-badge">
+        <span class="ico">✓</span>
+        {{ doc.sections.length }} sections
+        <fluent-badge appearance="outline">{{ doc.status }}</fluent-badge>
+      </div>
+    </div>
+    <h3>{{ doc.title }}</h3>
   </section>
 }
 

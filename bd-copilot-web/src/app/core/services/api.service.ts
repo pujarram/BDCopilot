@@ -9,6 +9,7 @@ import {
   BusinessCaseGenerationRequest,
   ChatRequest,
   ChatResponse,
+  Citation,
   DocumentListItem,
   ExportGenerationRequest,
   ExportResult,
@@ -271,6 +272,26 @@ export class ApiService {
   documentOpenUrl(documentId: string, userObjectId: string): string {
     const params = new URLSearchParams({ userObjectId });
     return `${this.baseUrl}/documents/${documentId}/open?${params.toString()}`;
+  }
+
+  /** Open SharePoint URL directly when available; otherwise stream/redirect via API. */
+  resolveCitationOpenUrl(c: Citation, userObjectId: string): string | null {
+    const url = c.sharePointUrl?.trim() ?? '';
+    if (/^https?:\/\//i.test(url)) {
+      return url;
+    }
+    if (c.documentId) {
+      return this.documentOpenUrl(c.documentId, userObjectId);
+    }
+    return null;
+  }
+
+  openCitation(c: Citation, userObjectId: string): void {
+    const url = this.resolveCitationOpenUrl(c, userObjectId);
+    if (!url) {
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   /** Open SharePoint or local indexed file in a new browser tab/window. */

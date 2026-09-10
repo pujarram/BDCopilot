@@ -10,10 +10,12 @@ import {
   KnowledgeSearchResponse,
   SearchResultItem
 } from '../../core/models/api-models';
+import { AiStreamText } from '../../shared/ai-stream-text.component';
 
 @Component({
   selector: 'app-knowledge-search',
   templateUrl: './knowledge-search.html',
+  imports: [AiStreamText],
   schemas: [CUSTOM_ELEMENTS_SCHEMA]
 })
 export class KnowledgeSearch {
@@ -78,19 +80,15 @@ export class KnowledgeSearch {
   }
 
   protected openCitation(c: Citation): void {
-    if (!c.documentId) {
-      this.toast.show('This citation has no document id.');
-      return;
-    }
-    this.api.openDocument(c.documentId, this.teams.user().objectId);
+    this.api.openCitation(c, this.teams.user().objectId);
+  }
+
+  protected citationUrl(c: Citation): string | null {
+    return this.api.resolveCitationOpenUrl(c, this.teams.user().objectId);
   }
 
   protected openSource(item: SearchResultItem): void {
-    if (!item.source.documentId) {
-      this.toast.show('This source has no document id.');
-      return;
-    }
-    this.api.openDocument(item.source.documentId, this.teams.user().objectId);
+    this.api.openCitation(item.source, this.teams.user().objectId);
   }
 
   protected useInRfp(item: SearchResultItem): void {

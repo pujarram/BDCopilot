@@ -97,25 +97,7 @@ public class AdminController : ControllerBase
 
     [HttpGet("planner-status")]
     public ActionResult<PlannerLiveStatus> PlannerStatus()
-    {
-        var groupCount = _planner.GroupIds.Count(id => !string.IsNullOrWhiteSpace(id));
-        var planCount = _planner.PlanIds.Count(id => !string.IsNullOrWhiteSpace(id));
-        var live = _graph.IsConfigured && (groupCount > 0 || planCount > 0) && !_planner.SeedDemoData;
-
-        return Ok(new PlannerLiveStatus
-        {
-            Enabled = _planner.Enabled,
-            SeedDemoData = _planner.SeedDemoData,
-            GraphConfigured = _graph.IsConfigured,
-            GroupIdCount = groupCount,
-            PlanIdCount = planCount,
-            IsLiveConfigured = live,
-            Guidance = live
-                ? "Live Graph Planner sync is configured. Hangfire refreshes plans every 15 minutes."
-                : "Grant app permissions Tasks.Read.All + Group.Read.All (admin consent), set Graph credentials, " +
-                  "set Planner:GroupIds and/or Planner:PlanIds, and set Planner:SeedDemoData=false."
-        });
-    }
+        => Ok(BuildPlannerLiveStatus());
 
     [HttpGet("telemetry")]
     public async Task<ActionResult<AdminTelemetrySummary>> Telemetry(CancellationToken ct)
@@ -150,7 +132,7 @@ public class AdminController : ControllerBase
             p95 = latencies[idx];
         }
 
-        var plannerStatus = PlannerStatus().Value!;
+        var plannerStatus = BuildPlannerLiveStatus();
 
         return Ok(new AdminTelemetrySummary
         {
@@ -193,9 +175,10 @@ public class AdminController : ControllerBase
                             || entraConfigured;
         var appInsights = !string.IsNullOrWhiteSpace(_config["ApplicationInsights:ConnectionString"]);
         var postgres = !string.IsNullOrWhiteSpace(_config.GetConnectionString("Postgres"));
-        var plannerStatus = PlannerStatus().Value!;
+        var plannerStatus = BuildPlannerLiveStatus();
 
-        var sharePointSiteCount = _graphSettings.SiteIds.Count(id => !string.IsNullOrWhiteSpace(id))
+        var siteIds = _graphSettings.SiteIds ?? [];
+        var sharePointSiteCount = siteIds.Count(id => !string.IsNullOrWhiteSpace(id))
                                   + (string.IsNullOrWhiteSpace(_graphSettings.PilotSiteId) ? 0 : 1)
                                   + (string.IsNullOrWhiteSpace(_graphSettings.PilotSitePath) ? 0 : 1);
         var sharePointConfigured = _graph.IsConfigured
@@ -281,12 +264,12 @@ public class AdminController : ControllerBase
         var tenantProfile = new CustomerTenantProfile
         {
             TenantId = string.IsNullOrWhiteSpace(_azureAd.TenantId) ? _graphSettings.TenantId : _azureAd.TenantId,
-            PlannerGroupIds = _planner.GroupIds.Where(id => !string.IsNullOrWhiteSpace(id)).ToList(),
-            PlannerPlanIds = _planner.PlanIds.Where(id => !string.IsNullOrWhiteSpace(id)).ToList(),
+            PlannerGroupIds = (_planner.GroupIds ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).ToList(),
+            PlannerPlanIds = (_planner.PlanIds ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).ToList(),
             PilotSitePath = _graphSettings.PilotSitePath,
             PilotSiteId = _graphSettings.PilotSiteId,
-            SharePointSiteIds = _graphSettings.SiteIds.Where(id => !string.IsNullOrWhiteSpace(id)).ToList(),
-            SyncFolderPaths = _graphSettings.SyncFolderPaths.Where(p => !string.IsNullOrWhiteSpace(p)).ToList()
+            SharePointSiteIds = siteIds.Where(id => !string.IsNullOrWhiteSpace(id)).ToList(),
+            SyncFolderPaths = (_graphSettings.SyncFolderPaths ?? []).Where(p => !string.IsNullOrWhiteSpace(p)).ToList()
         };
 
         return Ok(new TenantCutoverStatus
@@ -388,5 +371,26 @@ public class AdminController : ControllerBase
     {
         var manifest = await _onboarding.GenerateTeamsManifestAsync(ct);
         return File(System.Text.Encoding.UTF8.GetBytes(manifest), "application/json", "bd-copilot-manifest.json");
+    }
+
+    private PlannerLiveStatus BuildPlannerLiveStatus()
+    {
+        var groupCount = (_planner.GroupIds ?? []).Count(id => !string.IsNullOrWhiteSpace(id));
+        var planCount = (_planner.PlanIds ?? []).Count(id => !string.IsNullOrWhiteSpace(id));
+        var live = _graph.IsConfigured && (groupCount > 0 || planCount > 0) && !_planner.SeedDemoData;
+
+        return new PlannerLiveStatus
+        {
+            Enabled = _planner.Enabled,
+            SeedDemoData = _planner.SeedDemoData,
+            GraphConfigured = _graph.IsConfigured,
+            GroupIdCount = groupCount,
+            PlanIdCount = planCount,
+            IsLiveConfigured = live,
+            Guidance = live
+                ? "Live Graph Planner sync is configured. Hangfire refreshes plans every 15 minutes."
+                : "Grant app permissions Tasks.Read.All + Group.Read.All (admin consent), set Graph credentials, " +
+                  "set Planner:GroupIds and/or Planner:PlanIds, and set Planner:SeedDemoData=false."
+        };
     }
 }

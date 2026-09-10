@@ -12,9 +12,6 @@
 
         <nav class="tieto-header__view-switch" aria-label="Views">
           <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
-          <a routerLink="/architecture" routerLinkActive="active">Architecture</a>
-          <a routerLink="/stack" routerLinkActive="active">Tech Stack</a>
-          <a routerLink="/roadmap" routerLinkActive="active">Roadmap</a>
         </nav>
 
         <nav class="tieto-header__actions" aria-label="Global">
@@ -105,6 +102,9 @@
         </div>
       </div>
     </footer>
+
+    <app-copilot-fab />
+    <app-copilot-panel />
   </div>
 } @else {
   <router-outlet />

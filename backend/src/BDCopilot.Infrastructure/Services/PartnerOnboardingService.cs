@@ -31,7 +31,7 @@ public sealed class PartnerOnboardingService : IPartnerOnboardingService
             DisplayName = _customer.DisplayName,
             TenantId = _graph.Value.TenantId,
             PilotSitePath = _graph.Value.PilotSitePath,
-            PlannerGroupIds = _planner.Value.GroupIds.Where(g => !string.IsNullOrWhiteSpace(g)).ToList(),
+            PlannerGroupIds = (_planner.Value.GroupIds ?? []).Where(g => !string.IsNullOrWhiteSpace(g)).ToList(),
             GraphAppId = _graph.Value.ClientId,
             TeamsManifestBaseUrl = _teams.Value.WebBaseUrl
         });

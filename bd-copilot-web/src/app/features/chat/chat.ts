@@ -2,11 +2,14 @@ import { CUSTOM_ELEMENTS_SCHEMA, Component, ElementRef, ViewChild, inject, signa
 import { ApiService } from '../../core/services/api.service';
 import { TeamsService } from '../../core/services/teams.service';
 import { ChatTurn, Citation } from '../../core/models/api-models';
+import { AiStreamText } from '../../shared/ai-stream-text.component';
 
 interface DisplayMessage {
   role: 'user' | 'assistant';
   text: string;
   citations?: Citation[];
+  /** Animate typewriter on first reveal (assistant only). */
+  animate?: boolean;
 }
 
 const SUGGESTED_PROMPTS = [
@@ -19,6 +22,7 @@ const SUGGESTED_PROMPTS = [
 @Component({
   selector: 'app-chat',
   templateUrl: './chat.html',
+  imports: [AiStreamText],
   schemas: [CUSTOM_ELEMENTS_SCHEMA]
 })
 export class Chat {
@@ -46,6 +50,10 @@ export class Chat {
     if (event.key === 'Enter') this.ask();
   }
 
+  protected citationUrl(c: Citation): string | null {
+    return this.api.resolveCitationOpenUrl(c, this.teams.user().objectId);
+  }
+
   protected ask(): void {
     const text = this.draft().trim();
     if (!text || this.asking()) return;
@@ -55,7 +63,10 @@ export class Chat {
       content: m.text
     }));
 
-    this.messages.update(list => [...list, { role: 'user', text }]);
+    this.messages.update(list => [
+      ...list.map(m => (m.role === 'assistant' ? { ...m, animate: false } : m)),
+      { role: 'user', text }
+    ]);
     this.draft.set('');
     this.asking.set(true);
     this.errorMessage.set(null);
@@ -63,7 +74,10 @@ export class Chat {
 
     this.api.chat({ message: text, history, userObjectId: this.teams.user().objectId }).subscribe({
       next: response => {
-        this.messages.update(list => [...list, { role: 'assistant', text: response.answer, citations: response.citations }]);
+        this.messages.update(list => [
+          ...list,
+          { role: 'assistant', text: response.answer, citations: response.citations, animate: true }
+        ]);
         this.asking.set(false);
         this.scrollToBottom();
       },

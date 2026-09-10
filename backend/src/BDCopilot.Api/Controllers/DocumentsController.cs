@@ -45,18 +45,9 @@ public class DocumentsController : ControllerBase
         var source = string.IsNullOrWhiteSpace(corpusSource)
             ? CorpusSources.All
             : CorpusSources.Normalize(corpusSource);
-        var documentsQuery = _db.Documents.AsQueryable();
 
-        documentsQuery = source switch
-        {
-            CorpusSources.Local => documentsQuery.Where(d => d.GraphDriveId == CorpusSources.LocalDriveId),
-            CorpusSources.Online => documentsQuery.Where(d => CorpusSources.IsOnlineDocument(d)),
-            CorpusSources.Planner => documentsQuery.Where(d => d.GraphDriveId == CorpusSources.PlannerDriveId),
-            CorpusSources.Battlecards => documentsQuery.Where(d => d.GraphDriveId == CorpusSources.BattlecardsDriveId),
-            _ => documentsQuery
-        };
-
-        var documents = await documentsQuery
+        var documents = await _db.Documents
+            .ApplyCorpusFilter(source)
             .OrderByDescending(d => d.ModifiedDate)
             .ToListAsync(ct);
 

@@ -34,6 +34,7 @@ export class AuthService {
   private msal: PublicClientApplication | null = null;
   private authConfig = signal<AuthConfig | null>(null);
   private initPromise: Promise<void> | null = null;
+  private msalClientKey: string | null = null;
 
   readonly isLoggedIn = computed(() => {
     const s = this.session();
@@ -47,6 +48,8 @@ export class AuthService {
   readonly objectId = computed(() => this.session()?.objectId ?? null);
   readonly entraEnabled = computed(() => !!this.authConfig()?.entraEnabled);
   readonly allowPilotAdminLogin = computed(() => this.authConfig()?.allowPilotAdminLogin !== false);
+  readonly setupHints = computed(() => this.authConfig()?.setupHints ?? []);
+  readonly spaMisconfigured = computed(() => !!this.authConfig()?.spaFallsBackToApiClient);
 
   /** Load /api/auth/config and prepare MSAL when Entra is enabled. */
   ensureConfigured(): Observable<AuthConfig> {
@@ -60,7 +63,8 @@ export class AuthService {
           entraEnabled: false,
           enforceAcl: false,
           requireAuthOnApi: false,
-          allowPilotAdminLogin: true
+          allowPilotAdminLogin: true,
+          setupHints: ['Could not reach /api/auth/config — is BDCopilot.Api running on :5154?']
         });
         return throwError(() => err);
       })
@@ -81,7 +85,6 @@ export class AuthService {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
         localStorage.setItem(AUTH_MODE_KEY, 'pilot');
         this.session.set(stored);
-        // Lazy import avoided — TeamsService applies identity on next initialize / page load
       })
     );
   }
@@ -90,17 +93,34 @@ export class AuthService {
     let cfg = this.authConfig();
     if (!cfg) {
       cfg = await firstValueFrom(this.ensureConfigured());
+    } else {
+      await this.initMsal(cfg);
     }
-    if (!cfg?.entraEnabled || !this.msal) {
-      throw new Error('Microsoft Entra SSO is not configured for this environment.');
+
+    if (!cfg?.entraEnabled) {
+      throw new Error(
+        'Microsoft Entra SSO is not configured. Set AzureAd:TenantId and AzureAd:SpaClientId, then restart the API.'
+      );
+    }
+    if (!this.msal) {
+      throw new Error(
+        'MSAL failed to initialize. Check AzureAd:SpaClientId / TenantId and the browser console.'
+      );
     }
 
     const scopes = this.apiScopes(cfg);
     const request: RedirectRequest = {
       scopes,
-      redirectStartPage: window.location.origin + '/dashboard'
+      redirectStartPage: `${window.location.origin}/dashboard`,
+      prompt: 'select_account'
     };
-    await this.msal.loginRedirect(request);
+
+    try {
+      await this.msal.loginRedirect(request);
+    } catch (err: unknown) {
+      const message = this.formatMsalError(err, cfg);
+      throw new Error(message);
+    }
   }
 
   /** Call once at app bootstrap to complete MSAL redirect. */
@@ -117,10 +137,15 @@ export class AuthService {
     await this.initMsal(cfg);
     if (!this.msal) return false;
 
-    const result = await this.msal.handleRedirectPromise();
-    if (result) {
-      this.persistEntraResult(result, cfg);
-      return true;
+    try {
+      const result = await this.msal.handleRedirectPromise();
+      if (result) {
+        this.persistEntraResult(result, cfg);
+        return true;
+      }
+    } catch (err) {
+      console.error('MSAL handleRedirectPromise failed', err);
+      throw err;
     }
 
     const account = this.msal.getActiveAccount() ?? this.msal.getAllAccounts()[0] ?? null;
@@ -175,7 +200,7 @@ export class AuthService {
       const account = this.msal.getActiveAccount() ?? this.msal.getAllAccounts()[0];
       void this.msal.logoutRedirect({
         account: account ?? undefined,
-        postLogoutRedirectUri: window.location.origin + '/login'
+        postLogoutRedirectUri: `${window.location.origin}/login`
       });
       return;
     }
@@ -183,30 +208,44 @@ export class AuthService {
 
   private apiScopes(cfg: AuthConfig): string[] {
     const scope = cfg.apiScope?.trim();
+    // Keep API scope first so the access token is for BDCopilot.Api when configured.
     return scope ? [scope, 'openid', 'profile'] : ['openid', 'profile'];
   }
 
   private async initMsal(cfg: AuthConfig): Promise<void> {
     if (!cfg.entraEnabled || !cfg.clientId || !cfg.tenantId) {
       this.msal = null;
+      this.msalClientKey = null;
       return;
     }
-    if (this.msal) return;
+
+    const key = `${cfg.tenantId}|${cfg.clientId}|${cfg.authority ?? ''}`;
+    if (this.msal && this.msalClientKey === key) {
+      return;
+    }
+
+    // Config changed (e.g. SpaClientId fixed) — rebuild MSAL.
+    if (this.msal && this.msalClientKey !== key) {
+      this.msal = null;
+      this.initPromise = null;
+    }
+
     if (this.initPromise) {
       await this.initPromise;
-      return;
+      if (this.msal && this.msalClientKey === key) return;
     }
 
     this.initPromise = (async () => {
       const authority =
         cfg.authority?.trim() ||
         `https://login.microsoftonline.com/${cfg.tenantId}`;
+      const redirectUri = `${window.location.origin}/login`;
       const pca = new PublicClientApplication({
         auth: {
           clientId: cfg.clientId!,
           authority,
-          redirectUri: window.location.origin + '/login',
-          postLogoutRedirectUri: window.location.origin + '/login'
+          redirectUri,
+          postLogoutRedirectUri: redirectUri
         },
         cache: {
           cacheLocation: 'localStorage'
@@ -214,9 +253,51 @@ export class AuthService {
       });
       await pca.initialize();
       this.msal = pca;
+      this.msalClientKey = key;
     })();
 
-    await this.initPromise;
+    try {
+      await this.initPromise;
+    } catch (err) {
+      this.msal = null;
+      this.msalClientKey = null;
+      this.initPromise = null;
+      throw err;
+    }
+  }
+
+  private formatMsalError(err: unknown, cfg: AuthConfig): string {
+    const raw =
+      err && typeof err === 'object' && 'message' in err
+        ? String((err as { message: string }).message)
+        : String(err ?? 'Microsoft sign-in failed.');
+    const code =
+      err && typeof err === 'object' && 'errorCode' in err
+        ? String((err as { errorCode: string }).errorCode)
+        : '';
+
+    if (code === 'interaction_in_progress' || raw.includes('interaction_in_progress')) {
+      return 'A Microsoft sign-in is already in progress. Refresh the page, then try again.';
+    }
+    if (raw.includes('AADSTS50011') || raw.toLowerCase().includes('redirect')) {
+      return (
+        `Redirect URI mismatch. In Entra app ${cfg.clientId}, add SPA redirect URI: ` +
+        `${window.location.origin}/login`
+      );
+    }
+    if (raw.includes('AADSTS65001') || raw.includes('AADSTS70011') || raw.toLowerCase().includes('scope')) {
+      return (
+        `API scope not consented or invalid (${cfg.apiScope ?? 'n/a'}). ` +
+        'Expose access_as_user on the API app, grant it to the SPA, and admin-consent.'
+      );
+    }
+    if (cfg.spaFallsBackToApiClient) {
+      return (
+        `${raw} — Tip: set AzureAd:SpaClientId to a dedicated SPA app registration ` +
+        '(not the Azure Bot MicrosoftAppId), then restart the API.'
+      );
+    }
+    return raw;
   }
 
   private persistEntraResult(result: AuthenticationResult, cfg: AuthConfig): void {
