@@ -5,9 +5,18 @@
   </div>
 </div>
 
-<div class="prompt-chips">
+<div class="prompt-chips" role="group" aria-label="Suggested questions">
+  <p class="prompt-chips__label">Quick asks — click to send</p>
   @for (prompt of prompts; track prompt.key) {
-    <button class="chip" type="button" (click)="usePrompt(prompt.text)">{{ prompt.text }}</button>
+    <button
+      class="chip"
+      type="button"
+      [disabled]="asking()"
+      (click)="usePrompt(prompt.prompt)"
+      [attr.title]="prompt.prompt"
+    >
+      {{ prompt.label }}
+    </button>
   }
 </div>
 
@@ -73,5 +82,5 @@
     (input)="onInput($event)"
     (keydown)="onKeydown($event)">
   </fluent-text-input>
-  <fluent-button appearance="accent" [attr.disabled]="asking() ? true : null" (click)="ask()">Send</fluent-button>
+  <button type="button" class="btn" [disabled]="asking()" (click)="ask()">Send</button>
 </div>

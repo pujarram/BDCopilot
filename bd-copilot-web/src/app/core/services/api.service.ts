@@ -47,6 +47,7 @@ import {
   TagWinLossRequest,
   MultiApprovalStatus,
   CompetitivePositioningRequest,
+  PublishBattleCardResult,
   DynamicsDealContext,
   RoiDashboardSummary,
   CustomerUsageSummary,
@@ -470,6 +471,25 @@ export class ApiService {
     signal?: AbortSignal
   ): AsyncGenerator<RfpStreamEvent, void, unknown> {
     yield* this.readSseStream(`${this.baseUrl}/generate/competitive/stream`, request, signal, 'Competitive stream');
+  }
+
+  generateBattleCard(request: CompetitivePositioningRequest): Observable<GeneratedDocument> {
+    return this.http.post<GeneratedDocument>(`${this.baseUrl}/generate/battle-card`, request);
+  }
+
+  async *generateBattleCardStream(
+    request: CompetitivePositioningRequest,
+    signal?: AbortSignal
+  ): AsyncGenerator<RfpStreamEvent, void, unknown> {
+    yield* this.readSseStream(`${this.baseUrl}/generate/battle-card/stream`, request, signal, 'Battle card stream');
+  }
+
+  publishBattleCardToCorpus(body: {
+    document: GeneratedDocument;
+    userObjectId: string;
+    displayName?: string;
+  }): Observable<PublishBattleCardResult> {
+    return this.http.post<PublishBattleCardResult>(`${this.baseUrl}/generate/battle-card/publish-corpus`, body);
   }
 
   listDynamicsDeals(): Observable<DynamicsDealContext[]> {

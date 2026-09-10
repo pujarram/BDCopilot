@@ -3,6 +3,7 @@ import { ApiService } from '../../core/services/api.service';
 import { TeamsService } from '../../core/services/teams.service';
 import { ChatTurn, Citation } from '../../core/models/api-models';
 import { AiStreamText } from '../../shared/ai-stream-text.component';
+import { COPILOT_QUICK_CHIPS } from '../../shared/copilot-quick-chips';
 
 interface DisplayMessage {
   role: 'user' | 'assistant';
@@ -11,13 +12,6 @@ interface DisplayMessage {
   /** Animate typewriter on first reveal (assistant only). */
   animate?: boolean;
 }
-
-const SUGGESTED_PROMPTS = [
-  { key: 'rfp', text: 'Create RFP response for Wealth Management Platform based on previous proposals' },
-  { key: 'demo', text: 'Find all demo assets related to Credit Risk and summarize' },
-  { key: 'knowledge', text: 'Show all references where Wealth Copilot was discussed' },
-  { key: 'meeting', text: 'Prepare meeting notes for customer ABC Bank' }
-];
 
 @Component({
   selector: 'app-chat',
@@ -31,14 +25,14 @@ export class Chat {
 
   @ViewChild('logEl') logEl?: ElementRef<HTMLDivElement>;
 
-  protected readonly prompts = SUGGESTED_PROMPTS;
+  protected readonly prompts = COPILOT_QUICK_CHIPS;
   protected readonly messages = signal<DisplayMessage[]>([]);
   protected readonly draft = signal('');
   protected readonly asking = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
 
-  protected usePrompt(text: string): void {
-    this.draft.set(text);
+  protected usePrompt(prompt: string): void {
+    this.draft.set(prompt);
     this.ask();
   }
 
@@ -82,22 +76,8 @@ export class Chat {
         this.scrollToBottom();
       },
       error: err => {
-        const status = err?.status;
-        const detail =
-          err?.error?.detail || err?.error?.title || err?.error?.message || err?.message;
-        if (status === 0 || status == null) {
-          this.errorMessage.set(
-            'Could not reach BD Copilot API (timeout or offline). Confirm BDCopilot.Api is running at http://localhost:5154 and Ollama is up (llama3.1:8b).'
-          );
-        } else if (status === 503) {
-          this.errorMessage.set(
-            detail ||
-              'AI provider unavailable. Confirm Ollama is running and llama3.1:8b is pulled.'
-          );
-        } else {
-          this.errorMessage.set(`Chat failed (HTTP ${status})${detail ? `: ${detail}` : ''}.`);
-        }
         console.error(err);
+        this.errorMessage.set('Chat failed — is the API running?');
         this.asking.set(false);
       }
     });

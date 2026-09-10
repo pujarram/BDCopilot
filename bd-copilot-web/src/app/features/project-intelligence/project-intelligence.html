@@ -3,9 +3,9 @@
     <h2>Project Intelligence</h2>
     <p>Planner-backed delivery views — health, Gantt, timeline, and team workload.</p>
   </div>
-  <fluent-button appearance="accent" [attr.disabled]="syncBusy() ? true : null" (click)="sync()">
+  <button type="button" class="btn" [disabled]="syncBusy()" (click)="sync()">
     {{ syncBusy() ? 'Syncing…' : 'Sync Planner' }}
-  </fluent-button>
+  </button>
 </div>
 
 @if (errorMessage()) {
@@ -283,7 +283,7 @@
       @if (crossLinks(); as cl) {
         <div class="pi-fusion-toolbar">
           <p class="pi-muted">{{ cl.summary }}</p>
-          <fluent-button appearance="outline" (click)="refreshFusion()">Refresh links</fluent-button>
+          <button type="button" class="btn-secondary" (click)="refreshFusion()">Refresh links</button>
         </div>
         @if (!cl.links.length) {
           <p class="pi-muted">No cross-links yet — delayed tasks will match RFP / delivery documents after sync.</p>
@@ -304,8 +304,8 @@
                 @if (l.excerpt) { <p class="pi-fusion-excerpt">{{ l.excerpt }}</p> }
                 @if (l.linkId) {
                   <div class="pi-fusion-actions">
-                    <fluent-button appearance="outline" (click)="crossLinkFeedback(l.linkId!, 'Upvote')">Helpful</fluent-button>
-                    <fluent-button (click)="crossLinkFeedback(l.linkId!, 'Downvote')">Not relevant</fluent-button>
+                    <button type="button" class="btn-secondary" (click)="crossLinkFeedback(l.linkId!, 'Upvote')">Helpful</button>
+                    <button type="button" class="btn-secondary" (click)="crossLinkFeedback(l.linkId!, 'Downvote')">Not relevant</button>
                   </div>
                 }
               </li>
@@ -436,10 +436,10 @@
           <section class="pi-insights__report">
             <h3>Stakeholder weekly report</h3>
             <div class="pi-insights__actions">
-              <fluent-button appearance="accent" [attr.disabled]="reportBusy() ? true : null" (click)="loadReport()">
+              <button type="button" class="btn" [disabled]="reportBusy()" (click)="loadReport()">
                 {{ reportBusy() ? 'Generating…' : 'Generate report' }}
-              </fluent-button>
-              <fluent-button appearance="outline" (click)="downloadReportDocx()">Download DOCX</fluent-button>
+              </button>
+              <button type="button" class="btn-secondary" (click)="downloadReportDocx()">Download DOCX</button>
             </div>
             @if (report(); as r) {
               <pre class="pi-insights__md">{{ r.markdownBody }}</pre>
@@ -482,9 +482,9 @@
             [value]="unifiedQuery()"
             (input)="unifiedQuery.set(($any($event.target)).value)"
           />
-          <fluent-button appearance="accent" [attr.disabled]="unifiedBusy() ? true : null" (click)="runUnified()">
+          <button type="button" class="btn" [disabled]="unifiedBusy()" (click)="runUnified()">
             {{ unifiedBusy() ? 'Running…' : 'Run unified query' }}
-          </fluent-button>
+          </button>
         </div>
         @if (unified(); as u) {
           <div class="pi-unified__result">

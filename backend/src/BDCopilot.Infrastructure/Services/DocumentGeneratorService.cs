@@ -414,8 +414,26 @@ public class DocumentGeneratorService : IDocumentGeneratorService
 
     private static readonly string[] CompetitiveSectionTitles =
     {
-        "Executive Positioning", "Where We Win", "Competitor Strengths to Acknowledge",
-        "Proof Points & References", "Recommended Talk Track"
+        "Competitor snapshot",
+        "Our strengths",
+        "Their weaknesses",
+        "Key differentiators",
+        "Objection handling",
+        "Win themes",
+        "Watch-outs",
+        "Recommended actions"
+    };
+
+    private static readonly string[] CompetitiveCompareSectionTitles =
+    {
+        "Side-by-side snapshot",
+        "Our strengths vs both",
+        "Competitor A weaknesses",
+        "Competitor B weaknesses",
+        "Key differentiators",
+        "Objection handling",
+        "Win themes",
+        "Recommended actions"
     };
 
     public async Task<GeneratedDocument> GenerateCompetitivePositioningAsync(
@@ -431,9 +449,12 @@ public class DocumentGeneratorService : IDocumentGeneratorService
             }
         }
 
+        var vs = string.IsNullOrWhiteSpace(request.CompetitorB)
+            ? request.Competitor
+            : $"{request.Competitor} & {request.CompetitorB}";
         return document ?? new GeneratedDocument
         {
-            Title = $"Competitive positioning vs {request.Competitor}",
+            Title = $"Battle Card: {request.OurSolution} vs {vs}",
             Sections = []
         };
     }
@@ -443,10 +464,32 @@ public class DocumentGeneratorService : IDocumentGeneratorService
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var generationId = Guid.NewGuid();
-        var documentTitle = $"Competitive positioning — {request.OurSolution} vs {request.Competitor}";
-        var query =
-            $"competitive positioning battlecard against {request.Competitor} for {request.OurSolution}. " +
-            (request.CustomerContext ?? "");
+        var compare = !string.IsNullOrWhiteSpace(request.CompetitorB);
+        var vsLabel = compare
+            ? $"{request.Competitor} vs {request.CompetitorB}"
+            : request.Competitor;
+        var documentTitle = $"Battle Card: {request.OurSolution} vs {vsLabel}";
+        var sectionTitles = compare ? CompetitiveCompareSectionTitles : CompetitiveSectionTitles;
+
+        var intel = (request.RawIntelligence ?? "").Trim();
+        var queryParts = new List<string>
+        {
+            $"battlecard competitive intelligence against {request.Competitor} for {request.OurSolution}"
+        };
+        if (compare)
+        {
+            queryParts.Add($"also compare {request.CompetitorB}");
+        }
+        if (!string.IsNullOrWhiteSpace(request.CustomerContext))
+        {
+            queryParts.Add(request.CustomerContext!);
+        }
+        if (intel.Length > 0)
+        {
+            queryParts.Add(intel.Length > 1200 ? intel[..1200] : intel);
+        }
+
+        var query = string.Join(". ", queryParts);
 
         var hits = await _vectorSearch.SearchAsync(
             query,
@@ -471,30 +514,26 @@ public class DocumentGeneratorService : IDocumentGeneratorService
             Type = "outline",
             GenerationId = generationId,
             DocumentTitle = documentTitle,
-            SectionTitles = CompetitiveSectionTitles.ToList()
+            SectionTitles = sectionTitles.ToList()
         };
 
         var sections = new List<GeneratedSection>();
-        for (var i = 0; i < CompetitiveSectionTitles.Length; i++)
+        for (var i = 0; i < sectionTitles.Length; i++)
         {
-            var title = CompetitiveSectionTitles[i];
+            var title = sectionTitles[i];
             var order = i + 1;
             yield return new RfpStreamEvent
             {
                 Type = "section-start",
                 GenerationId = generationId,
                 Order = order,
-                Title = title
+                Title = title,
+                Sources = hits.Select(h => h.Source).ToList()
             };
 
-            var instruction =
-                $"Write the \"{title}\" section of a competitive positioning brief for \"{request.OurSolution}\" " +
-                $"against competitor \"{request.Competitor}\". " +
-                (string.IsNullOrWhiteSpace(request.CustomerContext)
-                    ? ""
-                    : $"Customer context: {request.CustomerContext}. ") +
-                "Ground claims only in SOURCES (battlecards). Be fair, factual, and sales-usable." +
-                GenerationContextSuffix(request.Language, request.ComplianceRegion);
+            var instruction = BuildBattleCardSectionInstruction(
+                title, request, compare, intel,
+                GenerationContextSuffix(request.Language, request.ComplianceRegion));
 
             var builder = new StringBuilder();
             await foreach (var delta in DraftSectionStreamAsync(
@@ -544,6 +583,61 @@ public class DocumentGeneratorService : IDocumentGeneratorService
                 Status = "Draft"
             }
         };
+    }
+
+    private static string BuildBattleCardSectionInstruction(
+        string title,
+        CompetitivePositioningRequest request,
+        bool compare,
+        string intel,
+        string contextSuffix)
+    {
+        var sb = new StringBuilder();
+        sb.Append(
+            $"Write the \"{title}\" section of a sales-ready BD battle card for \"{request.OurSolution}\" ");
+        if (compare)
+        {
+            sb.Append($"comparing competitors \"{request.Competitor}\" (A) and \"{request.CompetitorB}\" (B). ");
+        }
+        else
+        {
+            sb.Append($"against competitor \"{request.Competitor}\". ");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.CustomerContext))
+        {
+            sb.Append($"Customer / deal context: {request.CustomerContext}. ");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.SourceType))
+        {
+            sb.Append($"Intelligence source type: {request.SourceType}. ");
+        }
+
+        if (intel.Length > 0)
+        {
+            var clipped = intel.Length > 6000 ? intel[..6000] + "…" : intel;
+            sb.Append("Additional user-supplied intelligence (use as primary facts when relevant):\n");
+            sb.Append(clipped);
+            sb.Append('\n');
+        }
+
+        if (string.Equals(title, "Objection handling", StringComparison.OrdinalIgnoreCase))
+        {
+            sb.Append(
+                "Format as 3–5 objection/response pairs, each as: " +
+                "\"Objection: …\" on one line then \"Response: …\" on the next. ");
+        }
+        else
+        {
+            sb.Append("Use concise bullet-style lines (3–6 bullets). ");
+        }
+
+        sb.Append(
+            "Ground claims in SOURCES (battlecards corpus) and the user intelligence above. " +
+            "Be fair, factual, and field-usable. Do not invent customers or certifications. ");
+        sb.Append(contextSuffix);
+        return sb.ToString();
     }
 
     private async Task<string> DraftSectionAsync(

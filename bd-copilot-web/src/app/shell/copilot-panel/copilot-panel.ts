@@ -14,6 +14,7 @@ import { SpeechService } from '../../core/services/speech.service';
 import { TeamsService } from '../../core/services/teams.service';
 import { Citation } from '../../core/models/api-models';
 import { AiStreamText } from '../../shared/ai-stream-text.component';
+import { COPILOT_QUICK_CHIPS } from '../../shared/copilot-quick-chips';
 
 @Component({
   selector: 'app-copilot-panel',
@@ -32,6 +33,7 @@ export class CopilotPanel {
 
   protected readonly draft = signal('');
   protected readonly voiceError = signal<string | null>(null);
+  protected readonly prompts = COPILOT_QUICK_CHIPS;
 
   protected readonly panelOpen = this.panelState.open;
   protected readonly readAloud = this.panelState.readAloud;
@@ -57,6 +59,11 @@ export class CopilotPanel {
       }
       queueMicrotask(() => this.scrollToBottom());
     });
+  }
+
+  protected useChip(prompt: string): void {
+    this.draft.set('');
+    this.chat.send(prompt);
   }
 
   protected close(): void {

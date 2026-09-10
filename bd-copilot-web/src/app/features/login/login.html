@@ -65,14 +65,10 @@
           />
         </div>
 
-        <fluent-button
-          [attr.appearance]="entraEnabled() ? 'outline' : 'accent'"
-          class="auth-card__submit"
-          [attr.disabled]="busy() ? true : null"
-          (click)="submit()"
-        >
+        <button type="button" class="auth-card__submit" [class.btn]="!entraEnabled()" [class.btn-secondary]="entraEnabled()" [disabled]="busy()"
+          (click)="submit()">
           {{ busy() ? 'Signing in…' : 'Sign in with admin account' }}
-        </fluent-button>
+        </button>
 
         <p class="auth-card__hint">Pilot default: <code>admin</code> / <code>admin123</code> · Session lasts 12 hours.</p>
       }

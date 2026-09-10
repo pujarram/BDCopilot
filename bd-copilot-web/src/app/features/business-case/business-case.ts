@@ -38,7 +38,7 @@ export class BusinessCase implements OnInit, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly searchReuse = inject(SearchReuseService);
 
-  protected readonly initiative = signal('AI Wealth Copilot Platform');
+  protected readonly initiative = signal('AI wealth copilot platform');
   protected readonly audience = signal('ExecutiveSponsor');
   protected readonly corpusSource = signal<CorpusSource>('Online');
   protected readonly complianceRegion = signal('EU');

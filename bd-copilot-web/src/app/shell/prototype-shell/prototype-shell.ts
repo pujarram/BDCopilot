@@ -40,7 +40,7 @@ export class PrototypeShell {
         { path: '/rfp', label: 'RFP Generator', icon: 'documents' },
         { path: '/business-case', label: 'Business Case', icon: 'scenarios' },
         { path: '/proposal', label: 'Proposal Generator', icon: 'proposals' },
-        { path: '/competitive', label: 'Competitive', icon: 'proposals' }
+        { path: '/battle-card', label: 'Battle Card', icon: 'proposals' }
       ]
     },
     {

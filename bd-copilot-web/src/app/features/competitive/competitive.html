@@ -11,9 +11,9 @@
     <p>Select a deal to fill customer context automatically.</p>
     <div class="pi-fusion-actions">
       @for (d of deals(); track d.opportunityId) {
-        <fluent-button appearance="outline" (click)="applyDeal(d)">
+        <button type="button" class="btn-secondary" (click)="applyDeal(d)">
           {{ d.client }} · {{ d.stage }}
-        </fluent-button>
+        </button>
       }
     </div>
   </div>
@@ -42,9 +42,9 @@
   </div>
 </div>
 
-<fluent-button appearance="accent" [attr.disabled]="generating() || streaming() ? true : null" (click)="generate()">
+<button type="button" class="btn" [disabled]="generating() || streaming()" (click)="generate()">
   {{ generating() || streaming() ? 'Generating…' : 'Generate competitive brief' }}
-</fluent-button>
+</button>
 
 @if (progressLabel()) {
   <div class="gen-progress" aria-live="polite">{{ progressLabel() }}</div>
@@ -125,8 +125,8 @@
           <strong>{{ r.role }}</strong> — {{ r.status }}
           @if (r.reviewerDisplayName) { ({{ r.reviewerDisplayName }}) }
           <div class="pi-fusion-actions">
-            <fluent-button appearance="accent" (click)="decide(r.role, 'Approved')">Approve as {{ r.role }}</fluent-button>
-            <fluent-button (click)="decide(r.role, 'Rejected')">Reject</fluent-button>
+            <button type="button" class="btn" (click)="decide(r.role, 'Approved')">Approve as {{ r.role }}</button>
+            <button type="button" class="btn-secondary" (click)="decide(r.role, 'Rejected')">Reject</button>
           </div>
         </li>
       }

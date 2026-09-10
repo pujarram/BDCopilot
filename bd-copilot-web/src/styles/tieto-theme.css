@@ -61,6 +61,16 @@
   --tieto-grey-700: #423b38;
   --tieto-white: #ffffff;
   --tieto-red-700: #be163c;
+
+  /* Impact brand aliases (tieto.com button system) */
+  --color-impact-blue-600: var(--tieto-blue-600);
+  --color-impact-blue-900: var(--tieto-blue-900);
+  --color-impact-yellow-300: var(--tieto-yellow-300);
+  --color-impact-yellow-200: var(--tieto-yellow-200);
+  --color-white: var(--tieto-white);
+  --spacing: 0.25rem;
+  --radius-3xl: 9999px;
+
   --bg: var(--tieto-grey-50);
   --surface: var(--tieto-white);
   --s2: var(--tieto-grey-100);
@@ -127,66 +137,182 @@ h1, h2, h3, h4 {
   letter-spacing: -0.02em;
 }
 
-/* ── Shared UI components ──────────────────────────────────────────── */
-.tieto-btn-primary {
+/* ── Shared UI components — Impact button system ───────────────────── */
+/*
+  Primary  = yellow fill (.btn / .btn-yellow)
+  Secondary = blue outline (.btn-secondary / .btn-secondary-blue-600)
+  Focus/click = dotted outline (yellow for primary, blue-900 for secondary)
+*/
+
+.btn,
+.btn-yellow,
+.btn-secondary,
+.btn-secondary-blue-600,
+.tieto-btn-primary,
+.tieto-btn-secondary,
+.auth-card__submit {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--tieto-yellow-300);
-  color: var(--tieto-blue-900);
+  border-radius: var(--radius-3xl);
+  padding-inline: calc(var(--spacing) * 6);
+  padding-block: calc(var(--spacing) * 3);
+  white-space: nowrap;
   font-family: var(--font-sans);
   font-size: 0.875rem;
   font-weight: 500;
+  line-height: 1.25;
   cursor: pointer;
-  transition: background 0.15s ease;
+  text-decoration: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  outline-offset: 2px;
+  box-sizing: border-box;
 }
 
+.btn,
+.btn-yellow,
+.tieto-btn-primary {
+  border: 1px solid transparent;
+  background-color: var(--color-impact-yellow-300);
+  color: var(--color-impact-blue-900);
+}
+
+.btn:hover:not(:disabled),
+.btn-yellow:hover:not(:disabled),
 .tieto-btn-primary:hover:not(:disabled) {
-  background: var(--tieto-yellow-200);
+  background-color: var(--color-impact-yellow-200);
+  color: var(--color-impact-blue-900);
+  text-decoration: none;
 }
 
-.tieto-btn-primary:disabled {
-  opacity: 0.6;
+.btn:focus,
+.btn:focus-visible,
+.btn-yellow:focus,
+.btn-yellow:focus-visible,
+.tieto-btn-primary:focus,
+.tieto-btn-primary:focus-visible,
+.btn:active:not(:disabled),
+.btn-yellow:active:not(:disabled),
+.tieto-btn-primary:active:not(:disabled) {
+  outline: 2px dotted var(--color-impact-yellow-300);
+  outline-offset: 2px;
+  outline-color: var(--color-impact-yellow-300);
+}
+
+.btn-secondary,
+.btn-secondary-blue-600,
+.tieto-btn-secondary {
+  border-style: solid;
+  border-width: 1px;
+  border-color: var(--color-impact-blue-600);
+  background: transparent;
+  color: var(--color-impact-blue-600);
+}
+
+.btn-secondary:hover:not(:disabled),
+.btn-secondary-blue-600:hover:not(:disabled),
+.tieto-btn-secondary:hover:not(:disabled) {
+  border-color: var(--tieto-blue-500);
+  color: var(--tieto-blue-500);
+  background: var(--teal-bg);
+  text-decoration: none;
+}
+
+.btn-secondary:focus,
+.btn-secondary:focus-visible,
+.btn-secondary-blue-600:focus,
+.btn-secondary-blue-600:focus-visible,
+.tieto-btn-secondary:focus,
+.tieto-btn-secondary:focus-visible,
+.btn-secondary:active:not(:disabled),
+.btn-secondary-blue-600:active:not(:disabled),
+.tieto-btn-secondary:active:not(:disabled) {
+  outline: 2px dotted var(--color-impact-blue-900);
+  outline-offset: 2px;
+  outline-color: var(--color-impact-blue-900);
+}
+
+.btn:disabled,
+.btn-yellow:disabled,
+.btn-secondary:disabled,
+.btn-secondary-blue-600:disabled,
+.tieto-btn-primary:disabled,
+.tieto-btn-secondary:disabled,
+.auth-card__submit:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
-.tieto-btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.65rem 1.15rem;
-  border: 2px solid var(--tieto-blue-600);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--tieto-blue-600);
-  font-family: var(--font-sans);
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
+.auth-card__submit {
+  width: 100%;
+  margin-top: 8px;
 }
 
-.tieto-btn-secondary:hover {
-  border-color: var(--tieto-blue-500);
-  color: var(--tieto-blue-500);
+.composer .btn,
+.copilot-panel__composer .btn {
+  flex-shrink: 0;
+}
+
+.battle-card-generate.btn,
+.battle-card-sidebar .btn,
+.battle-card-sidebar .btn-secondary {
+  width: 100%;
+}
+
+.battle-card-presets .btn-secondary {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.admin-console__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.admin-console__actions a {
+  text-decoration: none;
+}
+
+.pi-fusion-actions,
+.battle-card-actions,
+.rfp-history__actions,
+.gen-output-head > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .tieto-btn-ghost {
-  padding: 0.65rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding-inline: calc(var(--spacing) * 6);
+  padding-block: calc(var(--spacing) * 3);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-3xl);
   background: transparent;
   color: var(--text2);
+  font-family: var(--font-sans);
   font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
+  outline-offset: 2px;
 }
 
-.tieto-btn-ghost:hover {
+.tieto-btn-ghost:hover:not(:disabled) {
   background: var(--s2);
+  color: var(--color-impact-blue-600);
+}
+
+.tieto-btn-ghost:focus,
+.tieto-btn-ghost:focus-visible {
+  outline: 2px dotted var(--color-impact-blue-900);
+  outline-offset: 2px;
 }
 
 .tieto-card {
@@ -334,18 +460,28 @@ app-root {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0 1.5rem;
+  padding: 0 calc(var(--spacing) * 6);
+  min-height: var(--header-h);
   border: none;
-  background: var(--tieto-yellow-300);
-  color: var(--tieto-blue-900);
+  border-radius: 0;
+  background: var(--color-impact-yellow-300);
+  color: var(--color-impact-blue-900);
   font-family: var(--font-sans);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
+  outline-offset: -4px;
 }
 
 .tieto-header__menu-btn:hover {
-  background: var(--tieto-yellow-200);
+  background: var(--color-impact-yellow-200);
+}
+
+.tieto-header__menu-btn:focus,
+.tieto-header__menu-btn:focus-visible,
+.tieto-header__menu-btn:active {
+  outline: 2px dotted var(--color-impact-yellow-300);
+  outline-offset: -6px;
 }
 
 @media (min-width: 768px) {
@@ -490,14 +626,22 @@ app-root {
   color: var(--tieto-grey-400);
   cursor: pointer;
   padding: 0.25rem;
-  border-radius: 0.35rem;
+  border-radius: var(--radius-3xl);
   display: grid;
   place-items: center;
+  outline-offset: 2px;
 }
 
 .tieto-nav__logout:hover {
   color: var(--tieto-red-700);
   background: var(--rose-bg);
+}
+
+.tieto-nav__logout:focus,
+.tieto-nav__logout:focus-visible,
+.tieto-nav__logout:active {
+  outline: 2px dotted var(--color-impact-blue-900);
+  outline-offset: 2px;
 }
 
 .tieto-overlay {

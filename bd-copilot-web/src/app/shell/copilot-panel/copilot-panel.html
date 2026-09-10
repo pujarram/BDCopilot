@@ -34,7 +34,20 @@
 
     <div class="copilot-panel__log" #logEl>
       @if (messages().length === 0 && !asking()) {
-        <p class="copilot-panel__hint">Ask about RFPs, proposals, or SharePoint content. Answers include clickable source links.</p>
+        <p class="copilot-panel__hint">Ask about RFPs, proposals, or SharePoint content. Or tap a quick ask:</p>
+        <div class="copilot-panel__chips" role="group" aria-label="Suggested questions">
+          @for (chip of prompts; track chip.key) {
+            <button
+              type="button"
+              class="chip"
+              [disabled]="asking()"
+              (click)="useChip(chip.prompt)"
+              [attr.title]="chip.prompt"
+            >
+              {{ chip.label }}
+            </button>
+          }
+        </div>
       }
 
       @for (msg of messages(); track $index) {
@@ -95,7 +108,7 @@
         (input)="onInput($event)"
         (keydown)="onKeydown($event)">
       </fluent-text-input>
-      <fluent-button appearance="accent" [attr.disabled]="asking() ? true : null" (click)="send()">Send</fluent-button>
+      <button type="button" class="btn" [disabled]="asking()" (click)="send()">Send</button>
     </footer>
 
     <p class="copilot-panel__footer-link">

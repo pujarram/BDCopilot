@@ -854,6 +854,18 @@ export interface CompetitivePositioningRequest {
   language?: string;
   complianceRegion?: string;
   opportunityId?: string;
+  competitorB?: string;
+  sourceType?: 'text' | 'transcript' | 'file' | 'corpus';
+  rawIntelligence?: string;
+  documentIds?: string[];
+}
+
+export interface PublishBattleCardResult {
+  documentId: string;
+  fileName: string;
+  title: string;
+  corpusSource: string;
+  message: string;
 }
 
 export interface DynamicsDealContext {

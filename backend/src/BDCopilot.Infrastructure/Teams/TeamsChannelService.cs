@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using BDCopilot.Core.Interfaces;
 using BDCopilot.Core.Models;
@@ -25,6 +26,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
     private readonly IUnifiedIntelligenceService _unified;
     private readonly IPlannerSnapshotService _snapshots;
     private readonly IPipelineCapacityService _pipeline;
+    private readonly IDocumentGeneratorService _generator;
     private readonly TeamsBotSettings _settings;
     private readonly ILogger<TeamsChannelService> _logger;
 
@@ -36,6 +38,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
         IUnifiedIntelligenceService unified,
         IPlannerSnapshotService snapshots,
         IPipelineCapacityService pipeline,
+        IDocumentGeneratorService generator,
         IOptions<TeamsBotSettings> settings,
         ILogger<TeamsChannelService> logger)
     {
@@ -46,18 +49,53 @@ public sealed class TeamsChannelService : ITeamsChannelService
         _unified = unified;
         _snapshots = snapshots;
         _pipeline = pipeline;
+        _generator = generator;
         _settings = settings.Value;
         _logger = logger;
     }
 
     public async Task<IReadOnlyList<TeamsReply>> ProcessActivityAsync(TeamsActivity activity, CancellationToken ct = default)
     {
+        var userObjectId = activity.From?.AadObjectId
+                           ?? activity.From?.Id
+                           ?? _settings.FallbackUserObjectId;
+
+        // Adaptive Card Action.Submit / messageBack may arrive as invoke.
+        if (string.Equals(activity.Type, "invoke", StringComparison.OrdinalIgnoreCase))
+        {
+            var invokeText = ExtractInvokeText(activity);
+            if (!string.IsNullOrWhiteSpace(invokeText))
+            {
+                activity = new TeamsActivity
+                {
+                    Type = "message",
+                    Text = invokeText,
+                    From = activity.From,
+                    Recipient = activity.Recipient,
+                    Conversation = activity.Conversation,
+                    ServiceUrl = activity.ServiceUrl,
+                    ChannelId = activity.ChannelId
+                };
+            }
+            else
+            {
+                return Array.Empty<TeamsReply>();
+            }
+        }
+
         if (!string.Equals(activity.Type, "message", StringComparison.OrdinalIgnoreCase))
         {
             if (string.Equals(activity.Type, "conversationUpdate", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(activity.Type, "installationUpdate", StringComparison.OrdinalIgnoreCase))
             {
-                return [new TeamsReply { Text = BuildWelcome() }];
+                return
+                [
+                    new TeamsReply
+                    {
+                        Text = BuildWelcome(),
+                        AdaptiveCard = TeamsAdaptiveCardBuilder.QuickPromptChipsCard(QuickAskChips())
+                    }
+                ];
             }
 
             return Array.Empty<TeamsReply>();
@@ -67,19 +105,54 @@ public sealed class TeamsChannelService : ITeamsChannelService
         text = Regex.Replace(text, "<at>[^<]*</at>", "", RegexOptions.IgnoreCase).Trim();
 
         if (string.IsNullOrWhiteSpace(text)
-            || text.Equals("help", StringComparison.OrdinalIgnoreCase)
             || text.Equals("hi", StringComparison.OrdinalIgnoreCase)
             || text.Equals("hello", StringComparison.OrdinalIgnoreCase))
         {
-            return [new TeamsReply { Text = BuildHelp() }];
+            return
+            [
+                new TeamsReply
+                {
+                    Text = BuildWelcome(),
+                    AdaptiveCard = TeamsAdaptiveCardBuilder.QuickPromptChipsCard(QuickAskChips())
+                }
+            ];
         }
 
-        var userObjectId = activity.From?.AadObjectId
-                           ?? activity.From?.Id
-                           ?? _settings.FallbackUserObjectId;
+        if (text.Equals("help", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("chips", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("suggest", StringComparison.OrdinalIgnoreCase))
+        {
+            return
+            [
+                new TeamsReply
+                {
+                    Text = BuildHelp(),
+                    AdaptiveCard = TeamsAdaptiveCardBuilder.QuickPromptChipsCard(QuickAskChips())
+                }
+            ];
+        }
 
         try
         {
+            if (text.Equals("cancel generate", StringComparison.OrdinalIgnoreCase)
+                || text.Equals("cancel", StringComparison.OrdinalIgnoreCase)
+                || text.StartsWith("cancel generate", StringComparison.OrdinalIgnoreCase))
+            {
+                return [new TeamsReply { Text = "Cancelled — no document was generated." }];
+            }
+
+            var confirmReply = await TryConfirmGenerateAsync(text, userObjectId, ct);
+            if (confirmReply is not null)
+            {
+                return [confirmReply];
+            }
+
+            var generateOffer = TryOfferGenerateConfirm(text);
+            if (generateOffer is not null)
+            {
+                return [generateOffer];
+            }
+
             if (text.StartsWith("search ", StringComparison.OrdinalIgnoreCase)
                 || text.StartsWith("find ", StringComparison.OrdinalIgnoreCase))
             {
@@ -87,11 +160,23 @@ public sealed class TeamsChannelService : ITeamsChannelService
                 return [await SearchAsync(query, userObjectId, ct)];
             }
 
-            if (text.StartsWith("rfp", StringComparison.OrdinalIgnoreCase)
+            if (text.StartsWith("library", StringComparison.OrdinalIgnoreCase)
                 || text.StartsWith("export", StringComparison.OrdinalIgnoreCase)
-                || text.StartsWith("library", StringComparison.OrdinalIgnoreCase))
+                || text.Equals("rfp", StringComparison.OrdinalIgnoreCase)
+                || text.Equals("business case", StringComparison.OrdinalIgnoreCase)
+                || text.Equals("proposal", StringComparison.OrdinalIgnoreCase)
+                || text.Equals("battlecard", StringComparison.OrdinalIgnoreCase)
+                || text.Equals("battle-card", StringComparison.OrdinalIgnoreCase)
+                || text.Equals("battle card", StringComparison.OrdinalIgnoreCase)
+                || text.Equals("competitive", StringComparison.OrdinalIgnoreCase))
             {
                 return [new TeamsReply { Text = BuildTabRedirect(text) }];
+            }
+
+            var battlecardReply = await TryBattleCardCommandAsync(text, userObjectId, ct);
+            if (battlecardReply is not null)
+            {
+                return [battlecardReply];
             }
 
             var plannerReply = await TryPlannerCommandAsync(text, userObjectId, ct);
@@ -547,7 +632,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
     }
 
     private string BuildWelcome() =>
-        "Hi — I'm **BD Copilot** for Teams. Ask a BD question, type `delayed` for overdue Planner tasks, or `help` for commands.";
+        "Hi — I'm **BD Copilot** for Teams. Tap a quick ask below, type `generate rfp …` for Confirm/Cancel drafting, or `help` for commands.";
 
     private string BuildHelp()
     {
@@ -556,6 +641,15 @@ public sealed class TeamsChannelService : ITeamsChannelService
         return
             $"""
             **BD Copilot — Teams commands**
+
+            **Quick asks**
+            • Tap a chip below, or type `chips`
+
+            **Generate (Confirm / Cancel)**
+            • `generate rfp <topic> for <customer>`
+            • `generate business case <initiative>`
+            • `generate proposal <solution>`
+            • `generate battlecard vs <competitor>`
 
             **Project Intelligence**
             • `delayed` — overdue Planner tasks
@@ -571,20 +665,395 @@ public sealed class TeamsChannelService : ITeamsChannelService
             **Documents**
             • Ask any BD question — RAG chat with citations
             • `search <keywords>` — find indexed SharePoint files
-            • `rfp` / `library` — full tab generators & documents
+            • `battlecard vs <competitor>` — generate card + objection Adaptive Card
+            • `rfp` / `library` / `battlecard` — open generator tabs
 
             **Tabs:** {chat}
             """;
     }
 
+    private static List<(string Label, string Prompt)> QuickAskChips() =>
+    [
+        ("GDPR for banking", "How should GDPR and data residency be described to banking clients?"),
+        ("Wealth security", "What security and compliance topics are covered for wealth proposals?"),
+        ("Wealth proposal structure", "Summarize the wealth proposal template structure and recommended sections."),
+        ("Retail ROI", "What ROI and payback guidance appears in the retail business case?"),
+        ("Generate RFP", "generate rfp Wealth Management Platform for ABC Bank"),
+        ("Generate Battle Card", "generate battlecard vs Incumbent Chatbot"),
+        ("Delayed tasks", "delayed"),
+        ("Sprint health", "sprint")
+    ];
+
+    private static string? ExtractInvokeText(TeamsActivity activity)
+    {
+        if (activity.Value is null || activity.Value.Value.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        var value = activity.Value.Value;
+        if (value.ValueKind == JsonValueKind.String)
+        {
+            return value.GetString();
+        }
+
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            if (value.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String)
+            {
+                return textProp.GetString();
+            }
+
+            if (value.TryGetProperty("msteams", out var teams)
+                && teams.ValueKind == JsonValueKind.Object
+                && teams.TryGetProperty("text", out var mbText)
+                && mbText.ValueKind == JsonValueKind.String)
+            {
+                return mbText.GetString();
+            }
+
+            if (value.TryGetProperty("action", out var action)
+                && action.ValueKind == JsonValueKind.Object
+                && action.TryGetProperty("data", out var data))
+            {
+                if (data.ValueKind == JsonValueKind.String) return data.GetString();
+                if (data.ValueKind == JsonValueKind.Object
+                    && data.TryGetProperty("text", out var dataText)
+                    && dataText.ValueKind == JsonValueKind.String)
+                {
+                    return dataText.GetString();
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private TeamsReply? TryOfferGenerateConfirm(string text)
+    {
+        var m = Regex.Match(
+            text,
+            @"^generate\s+(rfp|business[\s-]?case|proposal|battle[\s-]?card)\b(?:\s+vs\.?)?\s*(.+)?$",
+            RegexOptions.IgnoreCase);
+        if (!m.Success)
+        {
+            // Also accept "create rfp …"
+            m = Regex.Match(
+                text,
+                @"^create\s+(rfp|business[\s-]?case|proposal|battle[\s-]?card)\b(?:\s+vs\.?)?\s*(.+)?$",
+                RegexOptions.IgnoreCase);
+        }
+
+        if (!m.Success) return null;
+
+        var kindRaw = m.Groups[1].Value.Trim().ToLowerInvariant();
+        var topic = (m.Groups[2].Success ? m.Groups[2].Value : "").Trim();
+        if (string.IsNullOrWhiteSpace(topic))
+        {
+            topic = kindRaw.Contains("battle") ? "Incumbent Chatbot"
+                : kindRaw.Contains("business") ? "AI Wealth Copilot Platform"
+                : kindRaw.Contains("proposal") ? "BD Copilot grounded assistant"
+                : "Wealth Management Platform for ABC Bank";
+        }
+
+        var (kind, label, path) = NormalizeGeneratorKind(kindRaw);
+        var confirmCmd = $"confirm generate {kind}|{topic}";
+        var card = TeamsAdaptiveCardBuilder.GeneratorConfirmCard(
+            label,
+            topic,
+            confirmCmd,
+            "cancel generate",
+            TabUrl(path));
+
+        return Reply(
+            $"Ready to draft **{label}** for:\n_{topic}_\n\nTap **Confirm** to generate, or **Cancel**.",
+            card);
+    }
+
+    private async Task<TeamsReply?> TryConfirmGenerateAsync(
+        string text,
+        string userObjectId,
+        CancellationToken ct)
+    {
+        if (!text.StartsWith("confirm generate ", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var payload = text["confirm generate ".Length..].Trim();
+        var parts = payload.Split('|', 2, StringSplitOptions.TrimEntries);
+        if (parts.Length == 0) return null;
+
+        var kind = parts[0].Trim().ToLowerInvariant();
+        var topic = parts.Length > 1 && !string.IsNullOrWhiteSpace(parts[1])
+            ? parts[1]
+            : "Wealth Management Platform";
+
+        _logger.LogInformation("Teams confirm generate {Kind} topic={Topic}", kind, topic);
+
+        try
+        {
+            return kind switch
+            {
+                "rfp" => await RunRfpGenerateAsync(topic, userObjectId, ct),
+                "business-case" => await RunBusinessCaseGenerateAsync(topic, userObjectId, ct),
+                "proposal" => await RunProposalGenerateAsync(topic, userObjectId, ct),
+                "battlecard" => await RunBattleCardGenerateAsync(topic, userObjectId, ct),
+                _ => new TeamsReply
+                {
+                    Text = "Unknown generator. Use `generate rfp …`, `generate business case …`, `generate proposal …`, or `generate battlecard vs …`."
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Teams confirm generate failed for {Kind}", kind);
+            return new TeamsReply
+            {
+                Text = $"Generation failed ({kind}). Open the full tab and try again, or confirm Ollama / Azure OpenAI is running."
+            };
+        }
+    }
+
+    private async Task<TeamsReply> RunRfpGenerateAsync(string topic, string userObjectId, CancellationToken ct)
+    {
+        var (title, customer) = SplitTopicAndCustomer(topic);
+        var doc = await _generator.GenerateRfpAsync(
+            new RfpGenerationRequest
+            {
+                Title = title,
+                Customer = customer,
+                UserObjectId = userObjectId,
+                ComplianceRegion = "EU"
+            },
+            ct);
+        return BuildGeneratorResultReply(doc, "/rfp");
+    }
+
+    private async Task<TeamsReply> RunBusinessCaseGenerateAsync(string topic, string userObjectId, CancellationToken ct)
+    {
+        var doc = await _generator.GenerateBusinessCaseAsync(
+            new BusinessCaseGenerationRequest
+            {
+                Initiative = topic,
+                UserObjectId = userObjectId,
+                ComplianceRegion = "EU"
+            },
+            ct);
+        return BuildGeneratorResultReply(doc, "/business-case");
+    }
+
+    private async Task<TeamsReply> RunProposalGenerateAsync(string topic, string userObjectId, CancellationToken ct)
+    {
+        var doc = await _generator.GenerateProposalAsync(
+            new ProposalGenerationRequest
+            {
+                Solution = topic,
+                UserObjectId = userObjectId,
+                ComplianceRegion = "EU"
+            },
+            ct);
+        return BuildGeneratorResultReply(doc, "/proposal");
+    }
+
+    private async Task<TeamsReply> RunBattleCardGenerateAsync(string topic, string userObjectId, CancellationToken ct)
+    {
+        var competitor = topic;
+        if (competitor.StartsWith("vs ", StringComparison.OrdinalIgnoreCase))
+        {
+            competitor = competitor[3..].Trim();
+        }
+
+        var doc = await _generator.GenerateCompetitivePositioningAsync(
+            new CompetitivePositioningRequest
+            {
+                Competitor = competitor,
+                OurSolution = "BD Copilot grounded assistant",
+                UserObjectId = userObjectId,
+                SourceType = "corpus",
+                ComplianceRegion = "EU"
+            },
+            ct);
+        return BuildGeneratorResultReply(doc, "/battle-card");
+    }
+
+    private TeamsReply BuildGeneratorResultReply(GeneratedDocument doc, string path)
+    {
+        var preview = doc.Sections.Count == 0
+            ? "No sections returned — check corpus / AI provider."
+            : string.Join("\n\n", doc.Sections.Take(2).Select(s => $"**{s.Title}**\n{Truncate(s.Content, 280)}"));
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"**{doc.Title}** — draft ready ({doc.Sections.Count} sections)");
+        sb.AppendLine();
+        sb.AppendLine(preview);
+        sb.AppendLine();
+        sb.AppendLine($"Edit / export in the tab: {TabUrl(path)}");
+
+        return Reply(
+            sb.ToString(),
+            TeamsAdaptiveCardBuilder.GeneratorResultCard(
+                doc.Title,
+                doc.Sections.Count,
+                preview.Replace("**", ""),
+                TabUrl(path)));
+    }
+
+    private static (string Kind, string Label, string Path) NormalizeGeneratorKind(string kindRaw)
+    {
+        var k = kindRaw.Replace(" ", "-").ToLowerInvariant();
+        if (k.StartsWith("business")) return ("business-case", "Business Case", "/business-case");
+        if (k.StartsWith("proposal")) return ("proposal", "Proposal", "/proposal");
+        if (k.StartsWith("battle")) return ("battlecard", "Battle Card", "/battle-card");
+        return ("rfp", "RFP", "/rfp");
+    }
+
+    private static (string Title, string Customer) SplitTopicAndCustomer(string topic)
+    {
+        var m = Regex.Match(topic, @"^(.+?)\s+for\s+(.+)$", RegexOptions.IgnoreCase);
+        if (m.Success)
+        {
+            return (m.Groups[1].Value.Trim(), m.Groups[2].Value.Trim());
+        }
+
+        return (topic, "Customer");
+    }
+
     private string BuildTabRedirect(string text)
     {
-        var path = text.StartsWith("library", StringComparison.OrdinalIgnoreCase) ? "/library"
-            : text.StartsWith("search", StringComparison.OrdinalIgnoreCase) ? "/search"
+        var lower = text.Trim().ToLowerInvariant();
+        var path = lower.StartsWith("library") ? "/library"
+            : lower.StartsWith("search") ? "/search"
+            : lower.StartsWith("battle") || lower.StartsWith("competitive") ? "/battle-card"
             : "/rfp";
+        var label = path switch
+        {
+            "/library" => "document library",
+            "/search" => "knowledge search",
+            "/battle-card" => "Battle Card generator",
+            _ => "RFP generator / export"
+        };
         return
-            $"For full **{(path == "/rfp" ? "RFP generator / export" : path.Trim('/'))}**, open the BD Copilot tab:\n{TabUrl(path)}\n\n"
-            + "In chat I can answer questions, run `search …`, and Planner commands like `delayed`.";
+            $"For full **{label}**, open the BD Copilot tab:\n{TabUrl(path)}\n\n"
+            + "In chat I can answer questions, run `search …`, `battlecard vs <competitor>`, and Planner commands like `delayed`.";
+    }
+
+    private async Task<TeamsReply?> TryBattleCardCommandAsync(
+        string text,
+        string userObjectId,
+        CancellationToken ct)
+    {
+        var lower = text.Trim();
+        if (!lower.StartsWith("battlecard", StringComparison.OrdinalIgnoreCase)
+            && !lower.StartsWith("battle-card", StringComparison.OrdinalIgnoreCase)
+            && !lower.StartsWith("battle card", StringComparison.OrdinalIgnoreCase)
+            && !lower.StartsWith("objections vs", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        // Exact tab redirects already handled; require a competitor name.
+        var competitor = ExtractBattleCardCompetitor(lower);
+        if (string.IsNullOrWhiteSpace(competitor))
+        {
+            return Reply(
+                "Usage: `battlecard vs Incumbent Chatbot` — or open the full generator:\n"
+                + TabUrl("/battle-card"));
+        }
+
+        _logger.LogInformation("Teams battlecard generate vs {Competitor}", competitor);
+        var doc = await _generator.GenerateCompetitivePositioningAsync(
+            new CompetitivePositioningRequest
+            {
+                Competitor = competitor,
+                OurSolution = "BD Copilot grounded assistant",
+                UserObjectId = userObjectId,
+                SourceType = "corpus",
+                ComplianceRegion = "EU"
+            },
+            ct);
+
+        var objections = ParseObjectionPairs(
+            doc.Sections.FirstOrDefault(s =>
+                s.Title.Contains("Objection", StringComparison.OrdinalIgnoreCase))?.Content ?? "");
+        var winThemes = SplitBullets(
+            doc.Sections.FirstOrDefault(s =>
+                s.Title.Contains("Win", StringComparison.OrdinalIgnoreCase))?.Content ?? "");
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"**{doc.Title}**");
+        sb.AppendLine();
+        foreach (var section in doc.Sections.Take(4))
+        {
+            sb.AppendLine($"**{section.Title}**");
+            sb.AppendLine(Truncate(section.Content, 420));
+            sb.AppendLine();
+        }
+
+        sb.AppendLine($"Full card: {TabUrl("/battle-card")}");
+
+        var card = TeamsAdaptiveCardBuilder.BattleCardObjectionsCard(
+            doc.Title,
+            competitor,
+            objections,
+            winThemes,
+            TabUrl("/battle-card"));
+
+        return Reply(sb.ToString(), card);
+    }
+
+    private static string? ExtractBattleCardCompetitor(string text)
+    {
+        var m = Regex.Match(
+            text,
+            @"^(?:battle[\s-]?card|objections)\s+(?:vs\.?|against)\s+(.+)$",
+            RegexOptions.IgnoreCase);
+        if (m.Success) return m.Groups[1].Value.Trim();
+
+        m = Regex.Match(text, @"^battle[\s-]?card\s+(.+)$", RegexOptions.IgnoreCase);
+        if (m.Success)
+        {
+            var rest = m.Groups[1].Value.Trim();
+            if (rest.Equals("vs", StringComparison.OrdinalIgnoreCase)) return null;
+            return rest;
+        }
+
+        return null;
+    }
+
+    private static List<(string Objection, string Response)> ParseObjectionPairs(string content)
+    {
+        var pairs = new List<(string, string)>();
+        if (string.IsNullOrWhiteSpace(content)) return pairs;
+
+        var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        string? pending = null;
+        foreach (var line in lines)
+        {
+            var cleaned = Regex.Replace(line, @"^[\-\*\u2022›>]+\s*", "");
+            if (cleaned.StartsWith("Objection:", StringComparison.OrdinalIgnoreCase))
+            {
+                pending = cleaned["Objection:".Length..].Trim();
+            }
+            else if (cleaned.StartsWith("Response:", StringComparison.OrdinalIgnoreCase) && pending is not null)
+            {
+                pairs.Add((pending, cleaned["Response:".Length..].Trim()));
+                pending = null;
+            }
+        }
+
+        return pairs;
+    }
+
+    private static List<string> SplitBullets(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return [];
+        return content
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(l => Regex.Replace(l, @"^[\-\*\u2022›>]+\s*", "").Trim())
+            .Where(l => l.Length > 0)
+            .Take(6)
+            .ToList();
     }
 
     private string TabUrl(string path)

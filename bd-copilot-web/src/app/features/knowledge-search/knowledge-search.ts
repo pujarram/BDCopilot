@@ -99,6 +99,10 @@ export class KnowledgeSearch {
     this.handOff('business-case', item);
   }
 
+  protected useInBattleCard(item: SearchResultItem): void {
+    this.handOff('battle-card', item);
+  }
+
   protected useAnswerInRfp(): void {
     const first = this.results()[0];
     if (!first) {
@@ -118,7 +122,7 @@ export class KnowledgeSearch {
   }
 
   private handOff(
-    target: 'rfp' | 'business-case',
+    target: 'rfp' | 'business-case' | 'battle-card',
     item: SearchResultItem,
     answerOverlay?: string
   ): void {
@@ -139,8 +143,15 @@ export class KnowledgeSearch {
       label
     });
 
-    const path = target === 'rfp' ? '/rfp' : '/business-case';
+    const path =
+      target === 'rfp' ? '/rfp' : target === 'battle-card' ? '/battle-card' : '/business-case';
     void this.router.navigateByUrl(path);
-    this.toast.show(target === 'rfp' ? 'Opening RFP with this source…' : 'Opening Business Case with this source…');
+    this.toast.show(
+      target === 'rfp'
+        ? 'Opening RFP with this source…'
+        : target === 'battle-card'
+          ? 'Opening Battle Card with this source…'
+          : 'Opening Business Case with this source…'
+    );
   }
 }

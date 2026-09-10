@@ -36,7 +36,7 @@ export class ProposalGenerator implements OnInit, OnDestroy {
   private readonly teams = inject(TeamsService);
   private readonly toast = inject(ToastService);
 
-  protected readonly solution = signal('AI Wealth Copilot Platform');
+  protected readonly solution = signal('AI wealth copilot platform');
   protected readonly includeDeck = signal(true);
   protected readonly includeArchitectureDiagram = signal(true);
   protected readonly corpusSource = signal<CorpusSource>('Online');

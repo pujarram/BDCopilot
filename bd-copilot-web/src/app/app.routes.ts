@@ -29,8 +29,13 @@ export const routes: Routes = [
         loadComponent: () => import('./features/proposal-generator/proposal-generator').then(m => m.ProposalGenerator)
       },
       {
+        path: 'battle-card',
+        loadComponent: () => import('./features/battle-card/battle-card').then(m => m.BattleCard)
+      },
+      {
         path: 'competitive',
-        loadComponent: () => import('./features/competitive/competitive').then(m => m.Competitive)
+        redirectTo: 'battle-card',
+        pathMatch: 'full'
       },
       {
         path: 'search',

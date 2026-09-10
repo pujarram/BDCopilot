@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { CorpusSource } from '../models/api-models';
 
-export type ReuseTarget = 'rfp' | 'business-case';
+export type ReuseTarget = 'rfp' | 'business-case' | 'battle-card';
 
 export interface SearchReusePayload {
   target: ReuseTarget;

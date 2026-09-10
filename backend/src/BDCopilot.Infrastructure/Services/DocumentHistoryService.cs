@@ -174,6 +174,7 @@ public class DocumentHistoryService : IDocumentHistoryService
             "Proposal" => string.IsNullOrWhiteSpace(_graphSettings.ProposalFolderPath)
                 ? "Proposals"
                 : _graphSettings.ProposalFolderPath,
+            "BattleCard" => "Battlecards",
             _ => _graphSettings.RfpFolderPath
         };
 
@@ -192,7 +193,8 @@ public class DocumentHistoryService : IDocumentHistoryService
     {
         if (string.IsNullOrWhiteSpace(documentType))
         {
-            throw new ArgumentException("Document type is required. Use BusinessCase or Proposal.");
+            throw new ArgumentException(
+                "Document type is required. Use BusinessCase, Proposal, or BattleCard.");
         }
 
         return documentType.Trim() switch
@@ -201,7 +203,13 @@ public class DocumentHistoryService : IDocumentHistoryService
                        || t.Equals("BusinessCase", StringComparison.OrdinalIgnoreCase) => "BusinessCase",
             var t when t.Equals("proposal", StringComparison.OrdinalIgnoreCase)
                        || t.Equals("Proposal", StringComparison.OrdinalIgnoreCase) => "Proposal",
-            _ => throw new ArgumentException($"Unsupported document type '{documentType}'. Use BusinessCase or Proposal.")
+            var t when t.Equals("battle-card", StringComparison.OrdinalIgnoreCase)
+                       || t.Equals("battlecard", StringComparison.OrdinalIgnoreCase)
+                       || t.Equals("BattleCard", StringComparison.OrdinalIgnoreCase)
+                       || t.Equals("competitive", StringComparison.OrdinalIgnoreCase)
+                       || t.Equals("Competitive", StringComparison.OrdinalIgnoreCase) => "BattleCard",
+            _ => throw new ArgumentException(
+                $"Unsupported document type '{documentType}'. Use BusinessCase, Proposal, or BattleCard.")
         };
     }
 }

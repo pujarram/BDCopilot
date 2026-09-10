@@ -6,8 +6,8 @@
       <p class="dash__sub">Your business development command center — grounded AI, document reuse, and project intelligence.</p>
     </div>
     <div class="dash__hero-actions">
-      <a routerLink="/chat"><fluent-button appearance="accent">Start chat</fluent-button></a>
-      <a routerLink="/admin"><fluent-button appearance="outline">Admin console</fluent-button></a>
+      <a routerLink="/chat"><button type="button" class="btn">Start chat</button></a>
+      <a routerLink="/admin"><button type="button" class="btn-secondary">Admin console</button></a>
     </div>
   </header>
 
@@ -79,14 +79,14 @@
         @if (s.projectInsights?.summary) {
           <p class="dash-insight">{{ s.projectInsights!.summary }}</p>
         }
-        <a routerLink="/projects"><fluent-button appearance="outline">Open Project Intelligence</fluent-button></a>
+        <a routerLink="/projects"><button type="button" class="btn-secondary">Open Project Intelligence</button></a>
       </article>
 
       <article class="dash-card">
         <h2>Security (24h)</h2>
         <p><strong>{{ s.accessDenialsLast24Hours }}</strong> access denials logged</p>
         <p class="dash__muted">Live Graph ACL checks when EnforceAcl is on in production.</p>
-        <a routerLink="/admin"><fluent-button appearance="outline">View audits</fluent-button></a>
+        <a routerLink="/admin"><button type="button" class="btn-secondary">View audits</button></a>
       </article>
     </section>
   }

@@ -34,7 +34,7 @@
     <fluent-text-input id="opp-owner" [attr.value]="owner()" (input)="owner.set($any($event.target).value)"></fluent-text-input>
   </div>
   <div class="field" style="align-self:end;">
-    <fluent-button appearance="accent" (click)="create()">Add opportunity</fluent-button>
+    <button type="button" class="btn" (click)="create()">Add opportunity</button>
   </div>
 </section>
 
@@ -78,11 +78,11 @@
           <strong>{{ r.title }}</strong> · {{ r.customer }}
           <span class="pi-fusion-meta">Outcome: {{ r.outcome || 'Open' }} · {{ r.createdAt | date:'mediumDate' }}</span>
           <div class="pi-fusion-actions">
-            <fluent-button appearance="accent" (click)="tagOutcome(r.id, 'Win')">Win</fluent-button>
-            <fluent-button (click)="tagOutcome(r.id, 'Loss')">Loss</fluent-button>
-            <fluent-button appearance="outline" (click)="tagOutcome(r.id, 'Open')">Clear</fluent-button>
+            <button type="button" class="btn" (click)="tagOutcome(r.id, 'Win')">Win</button>
+            <button type="button" class="btn-secondary" (click)="tagOutcome(r.id, 'Loss')">Loss</button>
+            <button type="button" class="btn-secondary" (click)="tagOutcome(r.id, 'Open')">Clear</button>
             @for (o of opportunities(); track o.id) {
-              <fluent-button appearance="outline" (click)="linkRfp(o.id, r)">Link → {{ o.name }}</fluent-button>
+              <button type="button" class="btn-secondary" (click)="linkRfp(o.id, r)">Link → {{ o.name }}</button>
             }
           </div>
         </li>

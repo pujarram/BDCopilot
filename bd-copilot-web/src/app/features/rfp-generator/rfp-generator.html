@@ -10,7 +10,7 @@
     <strong>From Knowledge Search · {{ reuse.label }}</strong>
     <p>{{ reuse.excerpt }}</p>
     <div class="reuse-banner__clear">
-      <fluent-button (click)="clearReuse()">Clear focus</fluent-button>
+      <button type="button" class="btn-secondary" (click)="clearReuse()">Clear focus</button>
     </div>
   </div>
 }
@@ -21,9 +21,9 @@
     <p>Pull CRM deal notes into focus material instead of typing them manually.</p>
     <div class="pi-fusion-actions">
       @for (d of dynamicsDeals(); track d.opportunityId) {
-        <fluent-button appearance="outline" (click)="pullDynamics(d.client)">{{ d.client }}</fluent-button>
+        <button type="button" class="btn-secondary" (click)="pullDynamics(d.client)">{{ d.client }}</button>
       }
-      <fluent-button appearance="accent" (click)="pullDynamics()">Use best match for customer</fluent-button>
+      <button type="button" class="btn" (click)="pullDynamics()">Use best match for customer</button>
     </div>
   </div>
 }
@@ -74,9 +74,9 @@
   </div>
 </div>
 
-<fluent-button appearance="accent" [attr.disabled]="generating() || streaming() ? true : null" (click)="generate()">
+<button type="button" class="btn" [disabled]="generating() || streaming()" (click)="generate()">
   {{ generating() || streaming() ? 'Generating…' : 'Generate RFP response' }}
-</fluent-button>
+</button>
 
 @if (progressLabel()) {
   <div class="gen-progress" aria-live="polite">{{ progressLabel() }}</div>
@@ -150,24 +150,24 @@
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         @if (!isApproved()) {
-          <fluent-button appearance="accent" [attr.disabled]="approving() ? true : null" (click)="approve()">
+          <button type="button" class="btn" [disabled]="approving()" (click)="approve()">
             {{ approving() ? 'Approving…' : 'Approve' }}
-          </fluent-button>
+          </button>
         }
-        <fluent-button [attr.disabled]="exporting() ? true : null" (click)="exportDocx()">
+        <button type="button" class="btn-secondary" [disabled]="exporting()" (click)="exportDocx()">
           {{ exporting() ? 'Exporting…' : 'a. Export .docx' }}
-        </fluent-button>
-        <fluent-button appearance="outline" (click)="saveVersionSnapshot()">Save version</fluent-button>
-        <fluent-button appearance="outline" [attr.disabled]="diffBusy() ? true : null" (click)="loadVersionDiff()">
+        </button>
+        <button type="button" class="btn-secondary" (click)="saveVersionSnapshot()">Save version</button>
+        <button type="button" class="btn-secondary" [disabled]="diffBusy()" (click)="loadVersionDiff()">
           {{ diffBusy() ? 'Diffing…' : 'Version diff' }}
-        </fluent-button>
-        <fluent-button [attr.disabled]="channelBusy() ? true : null" (click)="saveToBdChannel()">
+        </button>
+        <button type="button" class="btn-secondary" [disabled]="channelBusy()" (click)="saveToBdChannel()">
           {{ channelBusy() ? 'Uploading…' : 'b. Save to BD channel' }}
-        </fluent-button>
-        <fluent-button [attr.disabled]="saving() ? true : null" (click)="saveToDatabase()">
+        </button>
+        <button type="button" class="btn-secondary" [disabled]="saving()" (click)="saveToDatabase()">
           {{ saving() ? 'Saving…' : 'c. Save to database' }}
-        </fluent-button>
-        <fluent-button (click)="discard()">Discard</fluent-button>
+        </button>
+        <button type="button" class="btn-secondary" (click)="discard()">Discard</button>
       </div>
     </div>
     <p class="gen-hint">
@@ -187,8 +187,8 @@
         @for (r of a.reviews; track r.role) {
           <div class="pi-fusion-actions" style="margin-bottom:8px;">
             <strong>{{ r.role }}</strong> — {{ r.status }}
-            <fluent-button appearance="accent" (click)="decideReview(r.role, 'Approved')">Approve</fluent-button>
-            <fluent-button (click)="decideReview(r.role, 'Rejected')">Reject</fluent-button>
+            <button type="button" class="btn" (click)="decideReview(r.role, 'Approved')">Approve</button>
+            <button type="button" class="btn-secondary" (click)="decideReview(r.role, 'Rejected')">Reject</button>
           </div>
         }
       </div>
@@ -235,10 +235,10 @@
       }
     </ul>
     <div style="display:flex;gap:8px;">
-      <fluent-button appearance="accent" [attr.disabled]="complianceBusy() ? true : null" (click)="submitComplianceAndExport()">
+      <button type="button" class="btn" [disabled]="complianceBusy()" (click)="submitComplianceAndExport()">
         {{ complianceBusy() ? 'Submitting…' : 'Complete checklist & export' }}
-      </fluent-button>
-      <fluent-button (click)="showCompliance.set(false)">Cancel</fluent-button>
+      </button>
+      <button type="button" class="btn-secondary" (click)="showCompliance.set(false)">Cancel</button>
     </div>
   </div>
 }
@@ -253,7 +253,7 @@
 <section class="rfp-history">
   <div class="rfp-history__head">
     <h3>RFP history</h3>
-    <fluent-button (click)="refreshHistory()">Refresh</fluent-button>
+    <button type="button" class="btn-secondary" (click)="refreshHistory()">Refresh</button>
   </div>
   @if (!history().length) {
     <p class="gen-hint">No saved RFPs yet — generate one to populate history.</p>
@@ -272,9 +272,9 @@
             </div>
           </div>
           <div class="rfp-history__actions">
-            <fluent-button (click)="openHistory(item)">View</fluent-button>
-            <fluent-button (click)="exportHistory(item)">Export</fluent-button>
-            <fluent-button (click)="channelHistory(item)">Save to BD channel</fluent-button>
+            <button type="button" class="btn-secondary" (click)="openHistory(item)">View</button>
+            <button type="button" class="btn-secondary" (click)="exportHistory(item)">Export</button>
+            <button type="button" class="btn-secondary" (click)="channelHistory(item)">Save to BD channel</button>
           </div>
         </article>
       }
@@ -286,7 +286,7 @@
   <div class="section-preview">
     <div class="gen-output-head">
       <h4>{{ detail.title }}</h4>
-      <fluent-button (click)="closeHistoryDetail()">Close</fluent-button>
+      <button type="button" class="btn-secondary" (click)="closeHistoryDetail()">Close</button>
     </div>
     <p class="gen-hint">Created {{ detail.createdAt | date: 'medium' }} by {{ detail.createdByDisplayName || detail.createdByUserObjectId }}</p>
     @for (block of [

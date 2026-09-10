@@ -48,22 +48,33 @@
 }
 
 .copilot-panel__icon-btn {
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   cursor: pointer;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--radius-3xl, 9999px);
   font-size: 14px;
   line-height: 1;
+  color: var(--color-impact-blue-600, #3531cf);
+  outline-offset: 2px;
 }
 
 .copilot-panel__icon-btn:hover {
-  background: rgba(15, 108, 189, 0.08);
+  background: var(--teal-bg, #eef0fd);
+  color: var(--tieto-blue-500, #4e60e7);
+}
+
+.copilot-panel__icon-btn:focus,
+.copilot-panel__icon-btn:focus-visible,
+.copilot-panel__icon-btn:active {
+  outline: 2px dotted var(--color-impact-blue-900, #021e57);
+  outline-offset: 2px;
 }
 
 .copilot-panel__icon-btn.is-active {
-  background: rgba(14, 165, 160, 0.15);
+  background: rgba(245, 255, 86, 0.35);
+  color: var(--color-impact-blue-900, #021e57);
 }
 
 .copilot-panel__error {
@@ -85,7 +96,20 @@
   font-size: 12.5px;
   color: #64748b;
   line-height: 1.45;
-  margin: 0;
+  margin: 0 0 10px;
+}
+
+.copilot-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.copilot-panel__chips .chip {
+  font-size: 11.5px;
+  padding-inline: 10px;
+  padding-block: 6px;
 }
 
 .copilot-panel__msg {

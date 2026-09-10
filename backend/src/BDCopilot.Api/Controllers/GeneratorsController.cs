@@ -1,6 +1,7 @@
 using System.Text.Json;
 using BDCopilot.Core.Interfaces;
 using BDCopilot.Core.Models;
+using BDCopilot.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
@@ -20,13 +21,16 @@ public class GeneratorsController : ControllerBase
 
     private readonly IDocumentGeneratorService _generator;
     private readonly CompliancePackSettings _compliance;
+    private readonly IBattlecardsSeedService _battlecards;
 
     public GeneratorsController(
         IDocumentGeneratorService generator,
-        IOptions<CompliancePackSettings> compliance)
+        IOptions<CompliancePackSettings> compliance,
+        IBattlecardsSeedService battlecards)
     {
         _generator = generator;
         _compliance = compliance.Value;
+        _battlecards = battlecards;
     }
 
     [HttpGet("compliance-packs")]
@@ -118,6 +122,30 @@ public class GeneratorsController : ControllerBase
     [HttpPost("competitive/stream")]
     [Produces("text/event-stream")]
     public async Task CompetitiveStream([FromBody] CompetitivePositioningRequest request, CancellationToken ct)
+        => await WriteBattleCardStreamAsync(request, ct);
+
+    /// <summary>Alias for competitive — Battle Card generator (8-section card).</summary>
+    [HttpPost("battle-card")]
+    [ProducesResponseType(typeof(GeneratedDocument), StatusCodes.Status200OK)]
+    public async Task<ActionResult<GeneratedDocument>> BattleCard(
+        [FromBody] CompetitivePositioningRequest request,
+        CancellationToken ct)
+        => Ok(await _generator.GenerateCompetitivePositioningAsync(request, ct));
+
+    [HttpPost("battle-card/stream")]
+    [Produces("text/event-stream")]
+    public async Task BattleCardStream([FromBody] CompetitivePositioningRequest request, CancellationToken ct)
+        => await WriteBattleCardStreamAsync(request, ct);
+
+    /// <summary>Index a generated battle card into the Battlecards corpus for reuse.</summary>
+    [HttpPost("battle-card/publish-corpus")]
+    [ProducesResponseType(typeof(PublishBattleCardResult), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PublishBattleCardResult>> PublishBattleCard(
+        [FromBody] PublishBattleCardRequest request,
+        CancellationToken ct)
+        => Ok(await _battlecards.PublishGeneratedAsync(request, ct));
+
+    private async Task WriteBattleCardStreamAsync(CompetitivePositioningRequest request, CancellationToken ct)
     {
         Response.Headers.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache";

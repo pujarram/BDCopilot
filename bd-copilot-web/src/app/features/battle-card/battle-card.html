@@ -1,0 +1,244 @@
+<div class="panel-head">
+  <div>
+    <h2>Battle Card Generator</h2>
+    <p>
+      Grounded competitive intelligence from the Battlecards corpus plus your pasted win/loss notes, transcripts, or files.
+      Eight structured sections, compare-two mode, export, publish back to corpus, and pursuit linking.
+    </p>
+  </div>
+</div>
+
+<div class="battle-card-layout">
+  <aside class="battle-card-sidebar">
+    <div class="battle-card-sidebar__head">
+      <strong>Intelligence source</strong>
+    </div>
+    <div class="battle-card-tabs">
+      <button type="button" class="battle-card-tab" [class.is-active]="sourceTab() === 'text'" (click)="setSourceTab('text')">Paste text</button>
+      <button type="button" class="battle-card-tab" [class.is-active]="sourceTab() === 'transcript'" (click)="setSourceTab('transcript')">Transcript</button>
+      <button type="button" class="battle-card-tab" [class.is-active]="sourceTab() === 'file'" (click)="setSourceTab('file')">Upload file</button>
+    </div>
+
+    @if (sourceTab() === 'text') {
+      <label class="field-label" for="bc-paste">Competitive intelligence</label>
+      <textarea id="bc-paste" rows="8" [value]="pastedText()" (input)="pastedText.set($any($event.target).value)" placeholder="Win/loss report, competitor notes, RFP excerpts…"></textarea>
+    } @else if (sourceTab() === 'transcript') {
+      <label class="field-label" for="bc-transcript">Call / meeting transcript</label>
+      <textarea id="bc-transcript" rows="8" [value]="transcript()" (input)="transcript.set($any($event.target).value)" placeholder="Paste sales call or meeting notes…"></textarea>
+    } @else {
+      <label class="field-label">Upload TXT / notes</label>
+      <label class="battle-card-upload">
+        <input type="file" accept=".txt,.md,.csv" (change)="onFileSelected($event)" />
+        {{ fileName() ?? 'Click to upload' }}
+      </label>
+    }
+
+    <div class="battle-card-presets">
+      <span class="field-label">Win/loss presets</span>
+      @for (p of presets; track p.label) {
+        <button type="button" class="btn-secondary" (click)="applyPreset(p)">{{ p.label }}</button>
+      }
+    </div>
+
+    <div class="form-grid battle-card-sidebar__form">
+      <div class="field field--full">
+        <label for="bc-comp">Competitor A</label>
+        <fluent-text-input id="bc-comp" [attr.value]="competitor()" (input)="competitor.set($any($event.target).value)"></fluent-text-input>
+      </div>
+      <div class="field field--full">
+        <label class="corpus-radio">
+          <input type="checkbox" [checked]="compareMode()" (change)="compareMode.set($any($event.target).checked)" />
+          Compare two competitors
+        </label>
+      </div>
+      @if (compareMode()) {
+        <div class="field field--full">
+          <label for="bc-comp-b">Competitor B</label>
+          <fluent-text-input id="bc-comp-b" [attr.value]="competitorB()" (input)="competitorB.set($any($event.target).value)"></fluent-text-input>
+        </div>
+      }
+      <div class="field field--full">
+        <label for="bc-ours">Our solution</label>
+        <fluent-text-input id="bc-ours" [attr.value]="ourSolution()" (input)="ourSolution.set($any($event.target).value)"></fluent-text-input>
+      </div>
+      <div class="field field--full">
+        <label for="bc-region">Compliance region</label>
+        <select id="bc-region" [value]="complianceRegion()" (change)="complianceRegion.set($any($event.target).value)">
+          <option value="EU">EU / GDPR</option>
+          <option value="US">US</option>
+          <option value="FI">Finland</option>
+        </select>
+      </div>
+      <div class="field field--full">
+        <label for="bc-ctx">Customer / deal context</label>
+        <textarea id="bc-ctx" rows="3" [value]="customerContext()" (input)="customerContext.set($any($event.target).value)"></textarea>
+      </div>
+      @if (opportunities().length) {
+        <div class="field field--full">
+          <label for="bc-opp">Link to pursuit (optional)</label>
+          <select id="bc-opp" [value]="selectedOpportunityId()" (change)="selectedOpportunityId.set($any($event.target).value)">
+            <option value="">— None —</option>
+            @for (o of opportunities(); track o.id) {
+              <option [value]="o.id">{{ o.client }} · {{ o.stage }}</option>
+            }
+          </select>
+        </div>
+      }
+    </div>
+
+    @if (reuseBanner(); as reuse) {
+      <div class="reuse-banner battle-card-sidebar__reuse">
+        <strong>From Knowledge Search</strong>
+        <p>{{ reuse.label }}</p>
+        <button type="button" class="btn-secondary" (click)="clearReuse()">Clear</button>
+      </div>
+    }
+
+    @if (deals().length) {
+      <div class="battle-card-presets">
+        <span class="field-label">Dynamics deal context</span>
+        @for (d of deals(); track d.opportunityId) {
+          <button type="button" class="btn-secondary" (click)="applyDeal(d)">{{ d.client }}</button>
+        }
+      </div>
+    }
+
+    @if (errorMessage()) {
+      <div class="error-banner">{{ errorMessage() }}</div>
+    }
+
+    <button type="button" class="btn battle-card-generate" [disabled]="generating() || streaming() || !canGenerate()" (click)="generate()">
+      {{ generating() || streaming() ? 'Generating…' : 'Generate battle card' }}
+    </button>
+  </aside>
+
+  <div class="battle-card-main">
+    @if (progressLabel()) {
+      <div class="gen-progress" aria-live="polite">{{ progressLabel() }}</div>
+    }
+
+    @if (streamSections().length && (streaming() || generating())) {
+      <div class="gen-stream gen-stream--live">
+        @for (section of streamSections(); track section.order) {
+          <article class="gen-stream-card" [class.is-generating]="section.status === 'generating'" [class.is-done]="section.status === 'done'">
+            <header class="gen-stream-card__head">
+              <span class="gen-stream-card__n">{{ section.order.toString().padStart(2, '0') }}</span>
+              <h3 class="gen-stream-card__title">
+                {{ section.displayTitle }}
+                @if (section.status === 'generating') {
+                  <span class="gen-caret" aria-hidden="true"></span>
+                }
+              </h3>
+            </header>
+            @if (section.content) {
+              <div class="gen-stream-card__body"><p>{{ section.content }}</p></div>
+            }
+          </article>
+        }
+      </div>
+    }
+
+    @if (result(); as doc) {
+      <div class="battle-card-result-head">
+        <div>
+          <h3>{{ doc.title }}</h3>
+          <p class="gen-hint">{{ doc.sections.length }} sections · {{ doc.status }}</p>
+        </div>
+        <div class="battle-card-actions">
+          <button type="button" class="btn-secondary" (click)="copyJson()">{{ copied() ? 'Copied' : 'Copy JSON' }}</button>
+          <button type="button" class="btn-secondary" (click)="discard()">New</button>
+          <button type="button" class="btn-secondary" [disabled]="exporting()" (click)="exportDocx()">Export DOCX</button>
+          <button type="button" class="btn-secondary" [disabled]="exporting()" (click)="exportPptx()">Export PPTX</button>
+          <button type="button" class="btn-secondary" [disabled]="publishing()" (click)="publishToCorpus()">
+            {{ publishing() ? 'Publishing…' : 'Publish to corpus' }}
+          </button>
+          <button type="button" class="btn-secondary" [disabled]="saving()" (click)="saveToDatabase()">Save history</button>
+        </div>
+      </div>
+
+      <div class="battle-card-grid">
+        @for (item of cardSections(); track item.section.order) {
+          <article class="battle-card-section battle-card-section--{{ item.meta.tone }}">
+            <h4>{{ item.section.title }}</h4>
+            @if (isObjectionSection(item.section.title)) {
+              @for (pair of parseObjections(item.section.content); track pair.objection) {
+                <div class="battle-card-objection">
+                  <strong>Objection:</strong> {{ pair.objection }}
+                  <div class="battle-card-objection__response"><strong>Response:</strong> {{ pair.response }}</div>
+                </div>
+              }
+              @if (!parseObjections(item.section.content).length) {
+                <ul class="battle-card-bullets">
+                  @for (line of parseBullets(item.section.content); track line) {
+                    <li>{{ line }}</li>
+                  }
+                </ul>
+              }
+            } @else {
+              <ul class="battle-card-bullets">
+                @for (line of parseBullets(item.section.content); track line) {
+                  <li>{{ line }}</li>
+                }
+              </ul>
+            }
+            @if (item.section.sources.length) {
+              <div class="gen-stream-card__sources">
+                @for (src of item.section.sources.slice(0, 2); track src.fileName + (src.locator ?? '')) {
+                  <span class="src-chip">{{ src.fileName }}</span>
+                }
+              </div>
+            }
+          </article>
+        }
+      </div>
+
+      @if (approval(); as a) {
+        <section class="admin-console__cutover battle-card-approval">
+          <h3>Multi-reviewer approval</h3>
+          <p class="dash__muted">Overall: <strong>{{ a.overallStatus }}</strong></p>
+          <ul class="dash-checklist">
+            @for (r of a.reviews; track r.role) {
+              <li>
+                <strong>{{ r.role }}</strong> — {{ r.status }}
+                <div class="pi-fusion-actions">
+                  <button type="button" class="btn" (click)="decide(r.role, 'Approved')">Approve</button>
+                  <button type="button" class="btn-secondary" (click)="decide(r.role, 'Rejected')">Reject</button>
+                </div>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+    } @else if (!streamSections().length) {
+      <div class="battle-card-empty">
+        <h3>Ready to generate</h3>
+        <p>Paste win/loss intel or pick a preset on the left. BD Copilot structures it into an actionable, cited battle card.</p>
+      </div>
+    }
+  </div>
+</div>
+
+<section class="rfp-history">
+  <div class="rfp-history__head">
+    <h3>Battle card history</h3>
+    <button type="button" class="btn-secondary" (click)="refreshHistory()">Refresh</button>
+  </div>
+  @if (!history().length) {
+    <p class="gen-hint">No saved battle cards yet.</p>
+  } @else {
+    <div class="rfp-history__list">
+      @for (item of history(); track item.id) {
+        <article class="rfp-history__item">
+          <div>
+            <strong>{{ item.title }}</strong>
+            <div class="gen-hint">{{ item.createdAt | date: 'medium' }} · {{ item.status }}</div>
+          </div>
+          <div class="rfp-history__actions">
+            <button type="button" class="btn-secondary" (click)="exportHistory(item)">Export DOCX</button>
+            <button type="button" class="btn-secondary" (click)="exportHistory(item, 'pptx')">Export PPTX</button>
+          </div>
+        </article>
+      }
+    </div>
+  }
+</section>

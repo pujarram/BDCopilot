@@ -147,6 +147,35 @@ public class CompetitivePositioningRequest
     public string? Language { get; set; }
     public string? ComplianceRegion { get; set; }
     public Guid? OpportunityId { get; set; }
+
+    /// <summary>Optional second competitor for side-by-side battle card.</summary>
+    public string? CompetitorB { get; set; }
+
+    /// <summary>text | transcript | file | corpus — intelligence source tab.</summary>
+    public string? SourceType { get; set; }
+
+    /// <summary>Pasted competitive intel, win/loss notes, call transcript, or file text.</summary>
+    public string? RawIntelligence { get; set; }
+
+    /// <summary>Optional indexed document ids to boost retrieval (library picks).</summary>
+    public List<Guid>? DocumentIds { get; set; }
+}
+
+/// <summary>Publish a generated battle card back into the Battlecards corpus.</summary>
+public class PublishBattleCardRequest
+{
+    public required GeneratedDocument Document { get; set; }
+    public required string UserObjectId { get; set; }
+    public string? DisplayName { get; set; }
+}
+
+public class PublishBattleCardResult
+{
+    public Guid DocumentId { get; set; }
+    public string FileName { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string CorpusSource { get; set; } = CorpusSources.Battlecards;
+    public string Message { get; set; } = "";
 }
 
 /// <summary>Phase 7 — Dynamics deal context for generators.</summary>

@@ -7,15 +7,15 @@
         Signed in as <strong>{{ authService.displayName() }}</strong>.</p>
     </div>
     <div class="admin-console__actions">
-      <a routerLink="/dashboard"><fluent-button appearance="outline">Dashboard</fluent-button></a>
-      <a routerLink="/admin/onboard"><fluent-button appearance="outline">Onboarding wizard</fluent-button></a>
-      <fluent-button [attr.disabled]="reindexBusy() ? true : null" (click)="reindex()">
+      <a routerLink="/dashboard"><button type="button" class="btn-secondary">Dashboard</button></a>
+      <a routerLink="/admin/onboard"><button type="button" class="btn-secondary">Onboarding wizard</button></a>
+      <button type="button" class="btn-secondary" [disabled]="reindexBusy()" (click)="reindex()">
         {{ reindexBusy() ? 'Reindexing…' : 'Reindex corpus' }}
-      </fluent-button>
-      <fluent-button appearance="accent" [attr.disabled]="evalBusy() ? true : null" (click)="runGoldenEval()">
+      </button>
+      <button type="button" class="btn" [disabled]="evalBusy()" (click)="runGoldenEval()">
         {{ evalBusy() ? 'Running eval…' : 'Golden eval' }}
-      </fluent-button>
-      <fluent-button (click)="logout()">Sign out</fluent-button>
+      </button>
+      <button type="button" class="btn-secondary" (click)="logout()">Sign out</button>
     </div>
   </header>
 

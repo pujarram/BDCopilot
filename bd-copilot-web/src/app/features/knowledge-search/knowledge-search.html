@@ -34,9 +34,9 @@
     (input)="onInput($event)"
     (keydown)="onKeydown($event)">
   </fluent-text-input>
-  <fluent-button appearance="accent" [attr.disabled]="searching() ? true : null" (click)="search()">
+  <button type="button" class="btn" [disabled]="searching()" (click)="search()">
     {{ searching() ? 'Searching…' : 'Search' }}
-  </fluent-button>
+  </button>
 </div>
 
 @if (errorMessage()) {
@@ -87,8 +87,8 @@
       </div>
     }
     <div class="search-answer__actions">
-      <fluent-button appearance="accent" (click)="useAnswerInRfp()">Use answer in RFP</fluent-button>
-      <fluent-button (click)="useAnswerInBusinessCase()">Use answer in Business Case</fluent-button>
+      <button type="button" class="btn" (click)="useAnswerInRfp()">Use answer in RFP</button>
+      <button type="button" class="btn-secondary" (click)="useAnswerInBusinessCase()">Use answer in Business Case</button>
     </div>
   </article>
 }
@@ -106,9 +106,10 @@
     </div>
     <p>&ldquo;{{ r.excerpt }}&rdquo;</p>
     <div class="result-card__actions">
-      <fluent-button appearance="accent" (click)="useInRfp(r)">Use in RFP</fluent-button>
-      <fluent-button (click)="useInBusinessCase(r)">Use in Business Case</fluent-button>
-      <fluent-button (click)="openSource(r)">Open file</fluent-button>
+      <button type="button" class="btn" (click)="useInRfp(r)">Use in RFP</button>
+      <button type="button" class="btn-secondary" (click)="useInBusinessCase(r)">Use in Business Case</button>
+      <button type="button" class="btn-secondary" (click)="useInBattleCard(r)">Use in Battle Card</button>
+      <button type="button" class="btn-secondary" (click)="openSource(r)">Open file</button>
     </div>
   </div>
 }

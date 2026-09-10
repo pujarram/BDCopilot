@@ -5,7 +5,7 @@
       <h2>Tenant onboarding wizard</h2>
       <p>Step {{ step() }} of 4 — configure customer tenant, Planner groups, and Teams store packaging.</p>
     </div>
-    <a routerLink="/admin"><fluent-button appearance="outline">Back to Admin</fluent-button></a>
+    <a routerLink="/admin"><button type="button" class="btn-secondary">Back to Admin</button></a>
   </header>
 
   @if (profile(); as p) {
@@ -27,7 +27,7 @@
               <fluent-text-input id="ob-tenant" [attr.value]="p.tenantId" (input)="patch('tenantId', $any($event.target).value)"></fluent-text-input>
             </div>
           </div>
-          <fluent-button appearance="accent" (click)="next()">Next</fluent-button>
+          <button type="button" class="btn" (click)="next()">Next</button>
         </section>
       }
       @case (2) {
@@ -52,8 +52,8 @@
             </div>
           </div>
           <div class="onboard-nav">
-            <fluent-button (click)="back()">Back</fluent-button>
-            <fluent-button appearance="accent" (click)="next()">Next</fluent-button>
+            <button type="button" class="btn-secondary" (click)="back()">Back</button>
+            <button type="button" class="btn" (click)="next()">Next</button>
           </div>
         </section>
       }
@@ -79,10 +79,10 @@
             </div>
           </div>
           <div class="onboard-nav">
-            <fluent-button (click)="back()">Back</fluent-button>
-            <fluent-button appearance="accent" [attr.disabled]="saving() ? true : null" (click)="save()">
+            <button type="button" class="btn-secondary" (click)="back()">Back</button>
+            <button type="button" class="btn" [disabled]="saving()" (click)="save()">
               {{ saving() ? 'Saving…' : 'Save & continue' }}
-            </fluent-button>
+            </button>
           </div>
         </section>
       }
@@ -99,10 +99,10 @@
             </div>
           </div>
           <div class="onboard-nav">
-            <fluent-button (click)="back()">Back</fluent-button>
-            <fluent-button appearance="accent" [attr.disabled]="manifestBusy() ? true : null" (click)="downloadManifest()">
+            <button type="button" class="btn-secondary" (click)="back()">Back</button>
+            <button type="button" class="btn" [disabled]="manifestBusy()" (click)="downloadManifest()">
               {{ manifestBusy() ? 'Preparing…' : 'Download Teams manifest' }}
-            </fluent-button>
+            </button>
           </div>
           <p class="dash__muted">Cutover scripts: <code class="mono">docs/azure/Invoke-CustomerCutover.ps1</code></p>
         </section>

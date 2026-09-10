@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace BDCopilot.Core.Models;
 
 /// <summary>Minimal Bot Framework activity payload used by the Teams messaging endpoint.</summary>
@@ -9,6 +11,9 @@ public class TeamsActivity
     public string? ServiceUrl { get; set; }
     public string? ChannelId { get; set; }
     public string? Text { get; set; }
+    public string? Name { get; set; }
+    /// <summary>Adaptive Card Action.Submit / invoke payload.</summary>
+    public JsonElement? Value { get; set; }
     public TeamsChannelAccount? From { get; set; }
     public TeamsChannelAccount? Recipient { get; set; }
     public TeamsConversationAccount? Conversation { get; set; }

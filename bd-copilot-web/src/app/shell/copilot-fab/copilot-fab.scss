@@ -9,16 +9,25 @@
   cursor: pointer;
   display: grid;
   place-items: center;
-  color: #fff;
-  background: linear-gradient(145deg, #021e57 0%, #0f6cbd 100%);
-  box-shadow: 0 8px 24px rgba(2, 30, 87, 0.35);
+  color: var(--color-impact-blue-900, #021e57);
+  background: var(--color-impact-yellow-300, #f5ff56);
+  box-shadow: 0 8px 24px rgba(2, 30, 87, 0.28);
   z-index: 800;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  outline-offset: 3px;
 }
 
 .copilot-fab:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(2, 30, 87, 0.4);
+  background: var(--color-impact-yellow-200, #f6ff67);
+  box-shadow: 0 12px 28px rgba(2, 30, 87, 0.35);
+}
+
+.copilot-fab:focus,
+.copilot-fab:focus-visible,
+.copilot-fab:active {
+  outline: 2px dotted var(--color-impact-yellow-300, #f5ff56);
+  outline-offset: 3px;
 }
 
 .copilot-fab :deep(svg) {

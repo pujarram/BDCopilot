@@ -247,6 +247,152 @@ public static class TeamsAdaptiveCardBuilder
         };
     }
 
+    /// <summary>Battle card objections + win themes for field sellers in Teams.</summary>
+    public static JsonObject BattleCardObjectionsCard(
+        string title,
+        string competitor,
+        IReadOnlyList<(string Objection, string Response)> objections,
+        IReadOnlyList<string> winThemes,
+        string battleCardUrl)
+    {
+        var body = new JsonArray
+        {
+            TextBlock(Truncate(title, 80), "Large", true),
+            TextBlock($"vs {Truncate(competitor, 60)}", "Medium", true)
+        };
+
+        if (winThemes.Count > 0)
+        {
+            body.Add(TextBlock("Win themes", "Medium", true));
+            foreach (var theme in winThemes.Take(4))
+            {
+                body.Add(TextBlock($"• {Truncate(theme, 160)}", "Default"));
+            }
+        }
+
+        if (objections.Count > 0)
+        {
+            body.Add(TextBlock("Objection handling", "Medium", true));
+            foreach (var (objection, response) in objections.Take(4))
+            {
+                body.Add(FactSet(
+                    ("Objection", Truncate(objection, 180)),
+                    ("Response", Truncate(response, 220))));
+            }
+        }
+
+        return new JsonObject
+        {
+            ["type"] = "AdaptiveCard",
+            ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
+            ["version"] = "1.5",
+            ["body"] = body,
+            ["actions"] = Actions(battleCardUrl, "Open Battle Card")
+        };
+    }
+
+    /// <summary>Quick-ask chips — messageBack posts the prompt as a normal chat message.</summary>
+    public static JsonObject QuickPromptChipsCard(
+        IReadOnlyList<(string Label, string Prompt)> chips)
+    {
+        var actions = new JsonArray();
+        foreach (var (label, prompt) in chips.Take(8))
+        {
+            actions.Add(MessageBackAction(label, prompt, prompt));
+        }
+
+        return new JsonObject
+        {
+            ["type"] = "AdaptiveCard",
+            ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
+            ["version"] = "1.5",
+            ["body"] = new JsonArray
+            {
+                TextBlock("Quick asks", "Large", true),
+                TextBlock("Tap a chip to ask BD Copilot — grounded answer with citations.", "Default")
+            },
+            ["actions"] = actions
+        };
+    }
+
+    /// <summary>Confirm / Cancel before running a document generator in Teams.</summary>
+    public static JsonObject GeneratorConfirmCard(
+        string generatorLabel,
+        string topic,
+        string confirmCommand,
+        string cancelCommand,
+        string openTabUrl)
+    {
+        return new JsonObject
+        {
+            ["type"] = "AdaptiveCard",
+            ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
+            ["version"] = "1.5",
+            ["body"] = new JsonArray
+            {
+                TextBlock($"Generate {generatorLabel}?", "Large", true),
+                FactSet(
+                    ("Generator", generatorLabel),
+                    ("Topic", Truncate(topic, 160))),
+                TextBlock(
+                    "Confirm to draft with grounded sources. Or open the full generator tab for more controls.",
+                    "Default")
+            },
+            ["actions"] = new JsonArray
+            {
+                MessageBackAction("Confirm", $"Confirm {generatorLabel}", confirmCommand),
+                MessageBackAction("Cancel", "Cancel generation", cancelCommand),
+                new JsonObject
+                {
+                    ["type"] = "Action.OpenUrl",
+                    ["title"] = "Open full generator",
+                    ["url"] = openTabUrl
+                }
+            }
+        };
+    }
+
+    /// <summary>Short result card after Teams generation completes.</summary>
+    public static JsonObject GeneratorResultCard(
+        string title,
+        int sectionCount,
+        string preview,
+        string openTabUrl)
+    {
+        return new JsonObject
+        {
+            ["type"] = "AdaptiveCard",
+            ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
+            ["version"] = "1.5",
+            ["body"] = new JsonArray
+            {
+                TextBlock(Truncate(title, 90), "Large", true),
+                FactSet(
+                    ("Sections", sectionCount.ToString()),
+                    ("Status", "Draft")),
+                TextBlock(Truncate(preview, 420), "Default")
+            },
+            ["actions"] = Actions(openTabUrl, "Open generator")
+        };
+    }
+
+    private static JsonObject MessageBackAction(string title, string displayText, string text) =>
+        new()
+        {
+            ["type"] = "Action.Submit",
+            ["title"] = title,
+            ["data"] = new JsonObject
+            {
+                ["msteams"] = new JsonObject
+                {
+                    ["type"] = "messageBack",
+                    ["displayText"] = displayText,
+                    ["text"] = text,
+                    ["value"] = text
+                }
+            }
+        };
+
     private static JsonObject TextBlock(string text, string size, bool bold = false) =>
         new()
         {
