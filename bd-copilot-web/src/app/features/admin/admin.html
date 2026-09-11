@@ -7,7 +7,8 @@
         Signed in as <strong>{{ authService.displayName() }}</strong>.</p>
     </div>
     <div class="admin-console__actions">
-      <a routerLink="/dashboard"><button type="button" class="btn-secondary">Dashboard</button></a>
+      <a routerLink="/dashboard"><button type="button" class="btn-secondary">Home</button></a>
+      <a routerLink="/analytics"><button type="button" class="btn-secondary">ROI &amp; usage</button></a>
       <a routerLink="/admin/onboard"><button type="button" class="btn-secondary">Onboarding wizard</button></a>
       <button type="button" class="btn-secondary" [disabled]="reindexBusy()" (click)="reindex()">
         {{ reindexBusy() ? 'Reindexing…' : 'Reindex corpus' }}

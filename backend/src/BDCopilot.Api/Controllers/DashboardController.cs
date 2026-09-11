@@ -1,4 +1,3 @@
-using BDCopilot.Api.Filters;
 using BDCopilot.Core.Interfaces;
 using BDCopilot.Core.Models;
 using BDCopilot.Infrastructure.Data;
@@ -13,7 +12,6 @@ namespace BDCopilot.Api.Controllers;
 [ApiController]
 [Route("api/dashboard")]
 [Produces("application/json")]
-[AdminAuthorize]
 public class DashboardController : ControllerBase
 {
     private readonly IDocumentSyncService _sync;
@@ -97,27 +95,15 @@ public class DashboardController : ControllerBase
             [
                 new DashboardQuickLink
                 {
-                    Label = "AI Chat",
+                    Label = "Ask",
                     Path = "/chat",
                     Description = "Grounded Q&A with SharePoint citations"
                 },
                 new DashboardQuickLink
                 {
-                    Label = "Find & reuse",
-                    Path = "/search",
-                    Description = "Search indexed BD material and reuse in generators"
-                },
-                new DashboardQuickLink
-                {
-                    Label = "RFP Generator",
-                    Path = "/rfp",
-                    Description = "Draft and export RFP responses"
-                },
-                new DashboardQuickLink
-                {
-                    Label = "Project Intelligence",
-                    Path = "/projects",
-                    Description = "Planner health, Gantt, AI PM, unified briefs"
+                    Label = "Generate",
+                    Path = "/generate",
+                    Description = "Draft RFP, business case, proposal, or battle card"
                 },
                 new DashboardQuickLink
                 {
@@ -133,9 +119,21 @@ public class DashboardController : ControllerBase
                 },
                 new DashboardQuickLink
                 {
+                    Label = "Find & reuse",
+                    Path = "/search",
+                    Description = "Search indexed BD material (deep link — merged into Ask in Phase 1 nav)"
+                },
+                new DashboardQuickLink
+                {
+                    Label = "Project Intelligence",
+                    Path = "/projects",
+                    Description = "Planner health, Gantt, AI PM (admin deep link)"
+                },
+                new DashboardQuickLink
+                {
                     Label = "ROI & usage",
                     Path = "/analytics",
-                    Description = "Time saved, win-rate trend, customer AI cost"
+                    Description = "Time saved, win-rate trend, customer AI cost (admin only)"
                 },
                 new DashboardQuickLink
                 {

@@ -1,9 +1,12 @@
 import { CUSTOM_ELEMENTS_SCHEMA, Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
+import { Router } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { TeamsService } from '../../core/services/teams.service';
 import { ToastService } from '../../core/services/toast.service';
+import { GeneratePursuitContextService } from '../../core/services/generate-pursuit-context.service';
 import { Opportunity, RfpDocumentListItem } from '../../core/models/api-models';
+import { generateRoute } from '../../shared/generate-doc-types';
 
 @Component({
   selector: 'app-pursuits',
@@ -15,6 +18,8 @@ export class Pursuits implements OnInit {
   private readonly api = inject(ApiService);
   private readonly teams = inject(TeamsService);
   private readonly toast = inject(ToastService);
+  private readonly router = inject(Router);
+  private readonly pursuitCtx = inject(GeneratePursuitContextService);
 
   protected readonly opportunities = signal<Opportunity[]>([]);
   protected readonly rfps = signal<RfpDocumentListItem[]>([]);
@@ -37,13 +42,32 @@ export class Pursuits implements OnInit {
       if (pending === 0) this.loading.set(false);
     };
     this.api.listOpportunities().subscribe({
-      next: rows => { this.opportunities.set(rows); done(); },
-      error: err => { console.error(err); done(); }
+      next: rows => {
+        this.opportunities.set(rows);
+        done();
+      },
+      error: err => {
+        console.error(err);
+        done();
+      }
     });
     this.api.listRfpDocuments().subscribe({
-      next: rows => { this.rfps.set(rows); done(); },
-      error: err => { console.error(err); done(); }
+      next: rows => {
+        this.rfps.set(rows);
+        done();
+      },
+      error: err => {
+        console.error(err);
+        done();
+      }
     });
+  }
+
+  protected draftFor(opp: Opportunity, type: 'rfp' | 'business-case' | 'proposal' | 'battle-card'): void {
+    this.pursuitCtx.selectOpportunity(opp);
+    void this.router.navigateByUrl(
+      `${generateRoute(type)}?opportunityId=${encodeURIComponent(opp.id)}`
+    );
   }
 
   protected create(): void {
@@ -67,7 +91,10 @@ export class Pursuits implements OnInit {
         this.dealSize.set('');
         this.reload();
       },
-      error: err => { console.error(err); this.toast.show('Create failed.'); }
+      error: err => {
+        console.error(err);
+        this.toast.show('Create failed.');
+      }
     });
   }
 
@@ -81,7 +108,10 @@ export class Pursuits implements OnInit {
         this.toast.show(`Tagged ${outcome}.`);
         this.reload();
       },
-      error: err => { console.error(err); this.toast.show('Tag failed.'); }
+      error: err => {
+        console.error(err);
+        this.toast.show('Tag failed.');
+      }
     });
   }
 
@@ -97,7 +127,10 @@ export class Pursuits implements OnInit {
         this.toast.show('Linked RFP to opportunity.');
         this.reload();
       },
-      error: err => { console.error(err); this.toast.show('Link failed.'); }
+      error: err => {
+        console.error(err);
+        this.toast.show('Link failed.');
+      }
     });
   }
 }

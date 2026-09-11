@@ -83,4 +83,26 @@ public sealed class MultiApprovalService : IMultiApprovalService
             OverallStatus = rejected ? "Rejected" : fullyApproved ? "Approved" : "Pending"
         };
     }
+
+    public async Task<List<MultiApprovalStatus>> ListPendingAsync(int take = 10, CancellationToken ct = default)
+    {
+        var pendingIds = await _db.GenerationApprovals
+            .Where(a => a.Status == "Pending")
+            .Select(a => a.GenerationId)
+            .Distinct()
+            .Take(Math.Clamp(take, 1, 25))
+            .ToListAsync(ct);
+
+        var results = new List<MultiApprovalStatus>();
+        foreach (var id in pendingIds)
+        {
+            var status = await GetStatusAsync(id, ct);
+            if (status is not null && !status.IsFullyApproved && !status.IsRejected)
+            {
+                results.Add(status);
+            }
+        }
+
+        return results;
+    }
 }

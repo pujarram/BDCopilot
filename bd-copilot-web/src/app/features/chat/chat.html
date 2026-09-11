@@ -1,7 +1,20 @@
 <div class="panel-head">
   <div>
-    <h2>Copilot chat</h2>
-    <p>Ask in plain language — the copilot searches indexed Teams &amp; SharePoint files and answers with sources.</p>
+    <h2>Ask</h2>
+    <p>Ask in plain language — the copilot searches indexed Teams &amp; SharePoint files and answers with sources. Same conversation as the floating copilot panel.</p>
+  </div>
+  <div class="ask-toolbar">
+    <button
+      type="button"
+      class="btn-secondary ask-toolbar__btn"
+      [class.is-active]="readAloud()"
+      [class.is-speaking]="speaking()"
+      (click)="toggleReadAloud()"
+      [attr.aria-pressed]="readAloud()"
+      [attr.title]="readAloud() ? 'Read-aloud on' : 'Read-aloud off'"
+    >
+      {{ speaking() ? 'Speaking…' : (readAloud() ? 'Read aloud on' : 'Read aloud') }}
+    </button>
   </div>
 </div>
 
@@ -23,6 +36,9 @@
 @if (errorMessage()) {
   <div class="error-banner">{{ errorMessage() }}</div>
 }
+@if (voiceError()) {
+  <div class="error-banner">{{ voiceError() }}</div>
+}
 
 <div class="chat-log" #logEl>
   @for (msg of messages(); track $index) {
@@ -31,7 +47,7 @@
       <div class="bubble">
         @if (msg.role === 'assistant') {
           <p class="bubble__text">
-            <app-ai-stream-text [text]="msg.text" [animate]="!!msg.animate" />
+            <app-ai-stream-text [text]="msg.text" [animate]="shouldAnimate($index)" />
           </p>
         } @else {
           <p class="bubble__text">{{ msg.text }}</p>
@@ -76,6 +92,17 @@
 </div>
 
 <div class="composer">
+  @if (voiceSupported()) {
+    <button
+      type="button"
+      class="btn-secondary ask-mic"
+      [class.is-listening]="listening()"
+      (click)="startVoice()"
+      [attr.aria-label]="listening() ? 'Stop listening' : 'Speak question'"
+    >
+      {{ listening() ? 'Listening…' : 'Mic' }}
+    </button>
+  }
   <fluent-text-input
     placeholder="Ask BD Copilot about your proposals, RFPs or demos…"
     [attr.value]="draft()"

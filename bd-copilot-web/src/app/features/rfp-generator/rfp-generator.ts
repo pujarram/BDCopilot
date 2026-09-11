@@ -4,6 +4,7 @@ import { ApiService } from '../../core/services/api.service';
 import { TeamsService } from '../../core/services/teams.service';
 import { ToastService } from '../../core/services/toast.service';
 import { SearchReuseService, SearchReusePayload } from '../../core/services/search-reuse.service';
+import { GeneratePursuitContextService } from '../../core/services/generate-pursuit-context.service';
 import {
   GeneratedDocument,
   GeneratedSection,
@@ -37,6 +38,7 @@ export class RfpGenerator implements OnInit, OnDestroy {
   private readonly teams = inject(TeamsService);
   private readonly toast = inject(ToastService);
   private readonly searchReuse = inject(SearchReuseService);
+  private readonly pursuitCtx = inject(GeneratePursuitContextService);
 
   protected readonly title = signal('Wealth Management Platform — RFP Response');
   protected readonly customer = signal('Meridian Private Bank');
@@ -45,6 +47,7 @@ export class RfpGenerator implements OnInit, OnDestroy {
   protected readonly corpusSource = signal<CorpusSource>('Online');
   protected readonly complianceRegion = signal('EU');
   protected readonly focusNotes = signal<string | null>(null);
+  protected readonly linkedOpportunityId = signal<string | null>(null);
   protected readonly reuseBanner = signal<SearchReusePayload | null>(null);
 
   protected readonly generating = signal(false);
@@ -74,6 +77,7 @@ export class RfpGenerator implements OnInit, OnDestroy {
   private abort: AbortController | null = null;
 
   ngOnInit(): void {
+    this.applyPursuitContext();
     this.applySearchReuse();
     this.refreshHistory();
     this.api.listDynamicsDeals().subscribe({
@@ -96,6 +100,16 @@ export class RfpGenerator implements OnInit, OnDestroy {
   protected clearReuse(): void {
     this.reuseBanner.set(null);
     this.focusNotes.set(null);
+  }
+
+  private applyPursuitContext(): void {
+    const ctx = this.pursuitCtx.context();
+    if (!ctx) return;
+    this.customer.set(ctx.client);
+    this.focusNotes.set(ctx.focusNotes);
+    if (ctx.opportunityId) this.linkedOpportunityId.set(ctx.opportunityId);
+    this.title.set(`${ctx.name} — RFP Response`);
+    this.toast.show(`Grounded on pursuit “${ctx.name}”.`);
   }
 
   private applySearchReuse(): void {
@@ -422,6 +436,7 @@ export class RfpGenerator implements OnInit, OnDestroy {
           this.savedRfp.set(row);
           this.saving.set(false);
           this.refreshHistory();
+          this.linkSavedToPursuit(row.id, row.generationId, row.title);
           if (showToast) this.toast.show('Saved to RFP history database.');
         },
         error: err => {
@@ -430,6 +445,21 @@ export class RfpGenerator implements OnInit, OnDestroy {
           this.toast.show('Could not save RFP to database.');
         }
       });
+  }
+
+  private linkSavedToPursuit(rfpId: string, generationId: string, title: string): void {
+    const oppId = this.linkedOpportunityId();
+    if (!oppId) return;
+    this.api.linkOpportunityDocument({
+      opportunityId: oppId,
+      rfpDocumentId: rfpId,
+      generationId,
+      documentType: 'Rfp',
+      title
+    }).subscribe({
+      next: () => this.toast.show('Linked draft to pursuit.'),
+      error: err => console.error(err)
+    });
   }
 
   private async runLiveStream(signal: AbortSignal): Promise<void> {
@@ -443,6 +473,7 @@ export class RfpGenerator implements OnInit, OnDestroy {
           userObjectId: this.teams.user().objectId,
           corpusSource: this.corpusSource(),
           focusNotes: this.focusNotes() ?? undefined,
+          opportunityId: this.linkedOpportunityId() ?? undefined,
           complianceRegion: this.complianceRegion()
         },
         signal

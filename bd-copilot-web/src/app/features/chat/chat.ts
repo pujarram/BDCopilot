@@ -1,17 +1,11 @@
-import { CUSTOM_ELEMENTS_SCHEMA, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
-import { ApiService } from '../../core/services/api.service';
+import { CUSTOM_ELEMENTS_SCHEMA, Component, ElementRef, ViewChild, effect, inject, signal } from '@angular/core';
+import { Citation } from '../../core/models/api-models';
+import { CopilotChatService } from '../../core/services/copilot-chat.service';
+import { CopilotPanelStateService } from '../../core/services/copilot-panel-state.service';
+import { SpeechService } from '../../core/services/speech.service';
 import { TeamsService } from '../../core/services/teams.service';
-import { ChatTurn, Citation } from '../../core/models/api-models';
 import { AiStreamText } from '../../shared/ai-stream-text.component';
 import { COPILOT_QUICK_CHIPS } from '../../shared/copilot-quick-chips';
-
-interface DisplayMessage {
-  role: 'user' | 'assistant';
-  text: string;
-  citations?: Citation[];
-  /** Animate typewriter on first reveal (assistant only). */
-  animate?: boolean;
-}
 
 @Component({
   selector: 'app-chat',
@@ -20,20 +14,61 @@ interface DisplayMessage {
   schemas: [CUSTOM_ELEMENTS_SCHEMA]
 })
 export class Chat {
-  private readonly api = inject(ApiService);
+  private readonly chat = inject(CopilotChatService);
+  private readonly speech = inject(SpeechService);
+  private readonly panelState = inject(CopilotPanelStateService);
   private readonly teams = inject(TeamsService);
 
   @ViewChild('logEl') logEl?: ElementRef<HTMLDivElement>;
 
   protected readonly prompts = COPILOT_QUICK_CHIPS;
-  protected readonly messages = signal<DisplayMessage[]>([]);
+  protected readonly messages = this.chat.messages;
+  protected readonly asking = this.chat.asking;
+  protected readonly errorMessage = this.chat.errorMessage;
   protected readonly draft = signal('');
-  protected readonly asking = signal(false);
-  protected readonly errorMessage = signal<string | null>(null);
+  protected readonly voiceError = signal<string | null>(null);
+  protected readonly animateIndex = signal(-1);
+  protected readonly readAloud = this.panelState.readAloud;
+  protected readonly voiceSupported = this.speech.supported;
+  protected readonly listening = this.speech.listening;
+  protected readonly speaking = this.speech.speaking;
+
+  private trackedMessageCount = 0;
+  private lastAssistantText = '';
+
+  constructor() {
+    effect(() => {
+      const msgs = this.messages();
+      if (msgs.length > this.trackedMessageCount) {
+        const last = msgs[msgs.length - 1];
+        if (last?.role === 'assistant') {
+          this.animateIndex.set(msgs.length - 1);
+        }
+      }
+      this.trackedMessageCount = msgs.length;
+      queueMicrotask(() => this.scrollToBottom());
+    });
+
+    effect(() => {
+      const asking = this.chat.asking();
+      const msgs = this.messages();
+      const last = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+      if (
+        !asking
+        && last?.role === 'assistant'
+        && this.panelState.readAloud()
+        && last.text !== this.lastAssistantText
+      ) {
+        this.lastAssistantText = last.text;
+        this.speech.speak(last.text, 500);
+      }
+    });
+  }
 
   protected usePrompt(prompt: string): void {
-    this.draft.set(prompt);
-    this.ask();
+    this.draft.set('');
+    this.speech.stopSpeaking();
+    this.chat.send(prompt, this.teams.user().runningInTeams);
   }
 
   protected onInput(event: Event): void {
@@ -45,48 +80,45 @@ export class Chat {
   }
 
   protected citationUrl(c: Citation): string | null {
-    return this.api.resolveCitationOpenUrl(c, this.teams.user().objectId);
+    return this.chat.citationUrl(c);
+  }
+
+  protected shouldAnimate(index: number): boolean {
+    return this.animateIndex() === index;
   }
 
   protected ask(): void {
     const text = this.draft().trim();
     if (!text || this.asking()) return;
-
-    const history: ChatTurn[] = this.messages().map(m => ({
-      role: m.role === 'user' ? 'user' : 'assistant',
-      content: m.text
-    }));
-
-    this.messages.update(list => [
-      ...list.map(m => (m.role === 'assistant' ? { ...m, animate: false } : m)),
-      { role: 'user', text }
-    ]);
     this.draft.set('');
-    this.asking.set(true);
-    this.errorMessage.set(null);
-    this.scrollToBottom();
+    this.voiceError.set(null);
+    this.speech.stopSpeaking();
+    this.chat.send(text, this.teams.user().runningInTeams);
+  }
 
-    this.api.chat({ message: text, history, userObjectId: this.teams.user().objectId }).subscribe({
-      next: response => {
-        this.messages.update(list => [
-          ...list,
-          { role: 'assistant', text: response.answer, citations: response.citations, animate: true }
-        ]);
-        this.asking.set(false);
-        this.scrollToBottom();
+  protected toggleReadAloud(): void {
+    const next = !this.panelState.readAloud();
+    this.panelState.setReadAloud(next);
+    if (!next) this.speech.stopSpeaking();
+  }
+
+  protected startVoice(): void {
+    this.voiceError.set(null);
+    if (this.listening()) {
+      this.speech.stop();
+      return;
+    }
+    this.speech.listen(
+      text => {
+        this.draft.set(text);
+        this.ask();
       },
-      error: err => {
-        console.error(err);
-        this.errorMessage.set('Chat failed — is the API running?');
-        this.asking.set(false);
-      }
-    });
+      msg => this.voiceError.set(msg ?? 'Voice input failed.')
+    );
   }
 
   private scrollToBottom(): void {
-    queueMicrotask(() => {
-      const el = this.logEl?.nativeElement;
-      if (el) el.scrollTop = el.scrollHeight;
-    });
+    const el = this.logEl?.nativeElement;
+    if (el) el.scrollTop = el.scrollHeight;
   }
 }

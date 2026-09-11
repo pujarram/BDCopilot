@@ -34,19 +34,12 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         );
       }
 
-      const needsAdmin =
-        req.url.includes('/admin/') ||
-        req.url.includes('/dashboard/') ||
-        req.url.includes('/auth/me');
-      if (needsAdmin) {
-        return next(
-          req.clone({
-            setHeaders: { 'X-Bd-Admin-Token': token }
-          })
-        );
-      }
-
-      return next(req);
+      // Pilot session — send token on all API calls (dashboard Home + admin routes).
+      return next(
+        req.clone({
+          setHeaders: { 'X-Bd-Admin-Token': token }
+        })
+      );
     })
   );
 };

@@ -53,6 +53,7 @@ export interface RfpGenerationRequest {
   userObjectId: string;
   corpusSource?: CorpusSource;
   focusNotes?: string;
+  opportunityId?: string;
   language?: string;
   complianceRegion?: string;
 }
@@ -157,6 +158,7 @@ export interface BusinessCaseGenerationRequest {
   userObjectId: string;
   corpusSource?: CorpusSource;
   focusNotes?: string;
+  opportunityId?: string;
   language?: string;
   complianceRegion?: string;
 }
@@ -167,6 +169,8 @@ export interface ProposalGenerationRequest {
   includeArchitectureDiagram: boolean;
   userObjectId: string;
   corpusSource?: CorpusSource;
+  focusNotes?: string;
+  opportunityId?: string;
   language?: string;
   complianceRegion?: string;
 }

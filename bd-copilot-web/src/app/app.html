@@ -11,7 +11,7 @@
         </div>
 
         <nav class="tieto-header__view-switch" aria-label="Views">
-          <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+          <a routerLink="/dashboard" routerLinkActive="active">Home</a>
         </nav>
 
         <nav class="tieto-header__actions" aria-label="Global">
@@ -21,7 +21,7 @@
             </span>
             <div class="tieto-header__user-meta">
               <strong>{{ authService.displayName() ?? 'User' }}</strong>
-              <span>{{ authService.role() ?? 'Admin' }}</span>
+              <span>{{ authService.role() ?? 'User' }}</span>
             </div>
             <button type="button" class="tieto-header__signout" (click)="signOut()">
               Sign out

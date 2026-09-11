@@ -320,7 +320,7 @@ public class DocumentGeneratorService : IDocumentGeneratorService
         var generationId = Guid.NewGuid();
         var documentTitle = $"Proposal — {request.Solution}";
         var hits = await _vectorSearch.SearchAsync(
-            request.Solution,
+            BuildRetrievalQuery(request.Solution, request.FocusNotes),
             request.UserObjectId,
             topK: 12,
             corpusSource: request.CorpusSource,
@@ -361,6 +361,7 @@ public class DocumentGeneratorService : IDocumentGeneratorService
             var instruction =
                 $"Write the \"{title}\" section of a proposal for \"{request.Solution}\". " +
                 extras +
+                FocusInstruction(request.FocusNotes) +
                 "Base it only on the SOURCES." +
                 GenerationContextSuffix(request.Language, request.ComplianceRegion);
 

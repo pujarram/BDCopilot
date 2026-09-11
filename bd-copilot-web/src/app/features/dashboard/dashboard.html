@@ -3,11 +3,14 @@
     <div>
       <p class="dash__eyebrow">Welcome back</p>
       <h1>{{ auth.displayName() ?? 'BD Copilot' }}</h1>
-      <p class="dash__sub">Your business development command center — grounded AI, document reuse, and project intelligence.</p>
+      <p class="dash__sub">Your business development home — ask the corpus, generate drafts, and track pursuits.</p>
     </div>
     <div class="dash__hero-actions">
-      <a routerLink="/chat"><button type="button" class="btn">Start chat</button></a>
-      <a routerLink="/admin"><button type="button" class="btn-secondary">Admin console</button></a>
+      <a routerLink="/chat"><button type="button" class="btn">Ask Copilot</button></a>
+      <a routerLink="/generate"><button type="button" class="btn-secondary">Generate</button></a>
+      @if (auth.isAdmin()) {
+        <a routerLink="/admin"><button type="button" class="btn-secondary">Admin console</button></a>
+      }
     </div>
   </header>
 
@@ -39,11 +42,34 @@
       </article>
     </section>
 
+    @if (showRiskStrip()) {
+      <section class="dash-risk-strip" aria-label="Delivery risk">
+        <div class="dash-risk-strip__body">
+          <strong>Delivery risk</strong>
+          <p>
+            {{ summary()!.plannerHealth?.delayed ?? 0 }} delayed task(s)
+            · Risk {{ summary()!.projectInsights?.riskLevel ?? summary()!.plannerHealth?.riskLevel ?? '—' }}
+            @if (summary()!.projectInsights?.summary) {
+              — {{ summary()!.projectInsights!.summary }}
+            }
+          </p>
+          @if (stalled().length) {
+            <ul>
+              @for (a of stalled(); track a.taskId) {
+                <li>{{ a.title }} — stalled {{ a.stalledDays }}d</li>
+              }
+            </ul>
+          }
+        </div>
+        <button type="button" class="btn" (click)="askAboutRisk()">Ask Copilot</button>
+      </section>
+    }
+
     <section class="dash__grid">
       <article class="dash-card">
         <h2>Quick actions</h2>
         <div class="dash-links">
-          @for (link of s.quickLinks; track link.path) {
+          @for (link of quickLinks(); track link.path) {
             <a class="dash-link" [routerLink]="link.path">
               <strong>{{ link.label }}</strong>
               <span>{{ link.description }}</span>
@@ -79,14 +105,18 @@
         @if (s.projectInsights?.summary) {
           <p class="dash-insight">{{ s.projectInsights!.summary }}</p>
         }
-        <a routerLink="/projects"><button type="button" class="btn-secondary">Open Project Intelligence</button></a>
+        @if (auth.isAdmin()) {
+          <a routerLink="/projects"><button type="button" class="btn-secondary">Open Project Intelligence</button></a>
+        }
       </article>
 
       <article class="dash-card">
         <h2>Security (24h)</h2>
         <p><strong>{{ s.accessDenialsLast24Hours }}</strong> access denials logged</p>
         <p class="dash__muted">Live Graph ACL checks when EnforceAcl is on in production.</p>
-        <a routerLink="/admin"><button type="button" class="btn-secondary">View audits</button></a>
+        @if (auth.isAdmin()) {
+          <a routerLink="/admin"><button type="button" class="btn-secondary">View audits</button></a>
+        }
       </article>
     </section>
   }

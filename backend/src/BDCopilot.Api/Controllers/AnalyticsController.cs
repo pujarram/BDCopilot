@@ -1,3 +1,4 @@
+using BDCopilot.Api.Filters;
 using BDCopilot.Core.Interfaces;
 using BDCopilot.Core.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -7,6 +8,7 @@ namespace BDCopilot.Api.Controllers;
 [ApiController]
 [Route("api/analytics")]
 [Produces("application/json")]
+[AdminAuthorize]
 public class AnalyticsController : ControllerBase
 {
     private readonly IRoiAnalyticsService _roi;

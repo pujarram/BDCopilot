@@ -54,10 +54,10 @@
       "scopes": ["personal"]
     },
     {
-      "entityId": "bd-copilot-rfp",
-      "name": "RFP",
-      "contentUrl": "https://starlight-majesty-salute.ngrok-free.dev/rfp",
-      "websiteUrl": "https://starlight-majesty-salute.ngrok-free.dev/rfp",
+      "entityId": "bd-copilot-generate",
+      "name": "Generate",
+      "contentUrl": "https://starlight-majesty-salute.ngrok-free.dev/generate",
+      "websiteUrl": "https://starlight-majesty-salute.ngrok-free.dev/generate",
       "scopes": ["personal"]
     },
     {

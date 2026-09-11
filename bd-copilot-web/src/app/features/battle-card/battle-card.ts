@@ -4,6 +4,7 @@ import { ApiService } from '../../core/services/api.service';
 import { TeamsService } from '../../core/services/teams.service';
 import { ToastService } from '../../core/services/toast.service';
 import { SearchReuseService, SearchReusePayload } from '../../core/services/search-reuse.service';
+import { GeneratePursuitContextService } from '../../core/services/generate-pursuit-context.service';
 import {
   DynamicsDealContext,
   GeneratedDocument,
@@ -78,6 +79,7 @@ export class BattleCard implements OnInit, OnDestroy {
   private readonly teams = inject(TeamsService);
   private readonly toast = inject(ToastService);
   private readonly searchReuse = inject(SearchReuseService);
+  private readonly pursuitCtx = inject(GeneratePursuitContextService);
   private abort: AbortController | null = null;
 
   protected readonly presets = WIN_LOSS_PRESETS;
@@ -135,6 +137,7 @@ export class BattleCard implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
+    this.applyPursuitContext();
     this.applySearchReuse();
     this.refreshHistory();
     this.api.listDynamicsDeals().subscribe({
@@ -145,6 +148,14 @@ export class BattleCard implements OnInit, OnDestroy {
       next: o => this.opportunities.set(o),
       error: err => console.error(err)
     });
+  }
+
+  private applyPursuitContext(): void {
+    const ctx = this.pursuitCtx.context();
+    if (!ctx) return;
+    this.customerContext.set(ctx.focusNotes);
+    if (ctx.opportunityId) this.selectedOpportunityId.set(ctx.opportunityId);
+    this.toast.show(`Grounded on pursuit “${ctx.name}”.`);
   }
 
   ngOnDestroy(): void {

@@ -4,6 +4,7 @@ import { ApiService } from '../../core/services/api.service';
 import { TeamsService } from '../../core/services/teams.service';
 import { ToastService } from '../../core/services/toast.service';
 import { SearchReuseService, SearchReusePayload } from '../../core/services/search-reuse.service';
+import { GeneratePursuitContextService } from '../../core/services/generate-pursuit-context.service';
 import {
   GeneratedDocument,
   GeneratedDocumentHistory,
@@ -37,12 +38,14 @@ export class BusinessCase implements OnInit, OnDestroy {
   private readonly teams = inject(TeamsService);
   private readonly toast = inject(ToastService);
   private readonly searchReuse = inject(SearchReuseService);
+  private readonly pursuitCtx = inject(GeneratePursuitContextService);
 
   protected readonly initiative = signal('AI wealth copilot platform');
   protected readonly audience = signal('ExecutiveSponsor');
   protected readonly corpusSource = signal<CorpusSource>('Online');
   protected readonly complianceRegion = signal('EU');
   protected readonly focusNotes = signal<string | null>(null);
+  protected readonly linkedOpportunityId = signal<string | null>(null);
   protected readonly reuseBanner = signal<SearchReusePayload | null>(null);
 
   protected readonly generating = signal(false);
@@ -64,6 +67,7 @@ export class BusinessCase implements OnInit, OnDestroy {
   private abort: AbortController | null = null;
 
   ngOnInit(): void {
+    this.applyPursuitContext();
     this.applySearchReuse();
     this.refreshHistory();
   }
@@ -71,6 +75,15 @@ export class BusinessCase implements OnInit, OnDestroy {
   protected clearReuse(): void {
     this.reuseBanner.set(null);
     this.focusNotes.set(null);
+  }
+
+  private applyPursuitContext(): void {
+    const ctx = this.pursuitCtx.context();
+    if (!ctx) return;
+    this.initiative.set(ctx.name);
+    this.focusNotes.set(ctx.focusNotes);
+    if (ctx.opportunityId) this.linkedOpportunityId.set(ctx.opportunityId);
+    this.toast.show(`Grounded on pursuit “${ctx.name}”.`);
   }
 
   private applySearchReuse(): void {
@@ -303,6 +316,7 @@ export class BusinessCase implements OnInit, OnDestroy {
           userObjectId: this.teams.user().objectId,
           corpusSource: this.corpusSource(),
           focusNotes: this.focusNotes() ?? undefined,
+          opportunityId: this.linkedOpportunityId() ?? undefined,
           complianceRegion: this.complianceRegion()
         },
         signal

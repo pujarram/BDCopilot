@@ -43,6 +43,7 @@ export class AuthService {
 
   readonly displayName = computed(() => this.session()?.displayName ?? null);
   readonly role = computed(() => this.session()?.role ?? null);
+  readonly isAdmin = computed(() => this.role() === 'Admin');
   readonly token = computed(() => this.session()?.token ?? null);
   readonly authMode = computed(() => this.session()?.authMode ?? null);
   readonly objectId = computed(() => this.session()?.objectId ?? null);

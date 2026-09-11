@@ -77,6 +77,11 @@
   color: var(--color-impact-blue-900, #021e57);
 }
 
+.copilot-panel__icon-btn.is-speaking {
+  outline: 2px dotted var(--color-impact-blue-900, #021e57);
+  outline-offset: 2px;
+}
+
 .copilot-panel__error {
   margin: 8px 12px 0;
   padding: 8px 10px;

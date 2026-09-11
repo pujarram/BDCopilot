@@ -376,6 +376,55 @@ public static class TeamsAdaptiveCardBuilder
         };
     }
 
+    /// <summary>Legal / Sales approval reminder with Approve / Reject actions.</summary>
+    public static JsonObject ApprovalReminderCard(
+        string documentTitle,
+        Guid generationId,
+        IReadOnlyList<(string Role, string Status)> reviews,
+        string openTabUrl)
+    {
+        var body = new JsonArray
+        {
+            TextBlock("Approval reminder", "Large", true),
+            TextBlock(Truncate(documentTitle, 100), "Medium", true),
+            FactSet(reviews.Select(r => (r.Role, r.Status)).ToArray()),
+        };
+
+        var actions = new JsonArray();
+        foreach (var (role, status) in reviews)
+        {
+            if (!string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            actions.Add(MessageBackAction(
+                $"Approve ({role})",
+                $"Approve as {role}",
+                $"approve {generationId:D} as {role}"));
+            actions.Add(MessageBackAction(
+                $"Reject ({role})",
+                $"Reject as {role}",
+                $"reject {generationId:D} as {role}"));
+        }
+
+        actions.Add(new JsonObject
+        {
+            ["type"] = "Action.OpenUrl",
+            ["title"] = "Open draft",
+            ["url"] = openTabUrl
+        });
+
+        return new JsonObject
+        {
+            ["type"] = "AdaptiveCard",
+            ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
+            ["version"] = "1.5",
+            ["body"] = body,
+            ["actions"] = actions
+        };
+    }
+
     private static JsonObject MessageBackAction(string title, string displayText, string text) =>
         new()
         {

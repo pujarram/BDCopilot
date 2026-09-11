@@ -1,6 +1,6 @@
 <div class="app-shell">
   <nav id="app-nav" class="rail rail--enterprise" [class.is-open]="menuOpen()">
-    @for (section of nav; track section.title) {
+    @for (section of nav(); track section.title) {
       <div class="rail-label">{{ section.title }}</div>
       @for (item of section.items; track item.path) {
         <a [routerLink]="item.path" routerLinkActive="active" (click)="closeMenu()">

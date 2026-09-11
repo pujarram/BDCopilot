@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { ApiService } from '../../core/services/api.service';
 import { TeamsService } from '../../core/services/teams.service';
 import { ToastService } from '../../core/services/toast.service';
+import { GeneratePursuitContextService } from '../../core/services/generate-pursuit-context.service';
 import {
   GeneratedDocument,
   GeneratedDocumentHistory,
@@ -35,12 +36,15 @@ export class ProposalGenerator implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly teams = inject(TeamsService);
   private readonly toast = inject(ToastService);
+  private readonly pursuitCtx = inject(GeneratePursuitContextService);
 
   protected readonly solution = signal('AI wealth copilot platform');
   protected readonly includeDeck = signal(true);
   protected readonly includeArchitectureDiagram = signal(true);
   protected readonly corpusSource = signal<CorpusSource>('Online');
   protected readonly complianceRegion = signal('EU');
+  protected readonly focusNotes = signal<string | null>(null);
+  protected readonly linkedOpportunityId = signal<string | null>(null);
 
   protected readonly generating = signal(false);
   protected readonly streaming = signal(false);
@@ -61,7 +65,17 @@ export class ProposalGenerator implements OnInit, OnDestroy {
   private abort: AbortController | null = null;
 
   ngOnInit(): void {
+    this.applyPursuitContext();
     this.refreshHistory();
+  }
+
+  private applyPursuitContext(): void {
+    const ctx = this.pursuitCtx.context();
+    if (!ctx) return;
+    this.solution.set(`${ctx.name} for ${ctx.client}`);
+    this.focusNotes.set(ctx.focusNotes);
+    if (ctx.opportunityId) this.linkedOpportunityId.set(ctx.opportunityId);
+    this.toast.show(`Grounded on pursuit “${ctx.name}”.`);
   }
 
   ngOnDestroy(): void {
@@ -289,7 +303,9 @@ export class ProposalGenerator implements OnInit, OnDestroy {
           includeArchitectureDiagram: this.includeArchitectureDiagram(),
           userObjectId: this.teams.user().objectId,
           corpusSource: this.corpusSource(),
-          complianceRegion: this.complianceRegion()
+          complianceRegion: this.complianceRegion(),
+          focusNotes: this.focusNotes() ?? undefined,
+          opportunityId: this.linkedOpportunityId() ?? undefined
         },
         signal
       );

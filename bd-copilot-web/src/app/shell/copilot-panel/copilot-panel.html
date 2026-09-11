@@ -11,8 +11,10 @@
           type="button"
           class="copilot-panel__icon-btn"
           [class.is-active]="readAloud()"
+          [class.is-speaking]="speaking()"
           (click)="toggleReadAloud()"
-          [attr.title]="readAloud() ? 'Read-aloud on' : 'Read-aloud off'"
+          [attr.title]="readAloud() ? (speaking() ? 'Speaking… click to mute' : 'Read-aloud on') : 'Read-aloud off'"
+          [attr.aria-pressed]="readAloud()"
           aria-label="Toggle read aloud">
           🔊
         </button>
@@ -112,7 +114,7 @@
     </footer>
 
     <p class="copilot-panel__footer-link">
-      <a routerLink="/chat" (click)="close()">Open full chat</a>
+      <a routerLink="/chat" (click)="close()">Open Ask</a>
     </p>
   </aside>
 }

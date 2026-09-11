@@ -1,5 +1,6 @@
 import { CUSTOM_ELEMENTS_SCHEMA, Component, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { generateRoute } from '../../shared/generate-doc-types';
 import { ApiService } from '../../core/services/api.service';
 import { TeamsService } from '../../core/services/teams.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -143,8 +144,9 @@ export class KnowledgeSearch {
       label
     });
 
-    const path =
-      target === 'rfp' ? '/rfp' : target === 'battle-card' ? '/battle-card' : '/business-case';
+    const path = generateRoute(
+      target === 'battle-card' ? 'battle-card' : target === 'rfp' ? 'rfp' : 'business-case'
+    );
     void this.router.navigateByUrl(path);
     this.toast.show(
       target === 'rfp'

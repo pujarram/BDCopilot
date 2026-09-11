@@ -48,7 +48,7 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Name</th><th>Client</th><th>Size</th><th>Stage</th><th>Owner</th><th>Outcome</th><th>Linked docs</th></tr>
+          <tr><th>Name</th><th>Client</th><th>Size</th><th>Stage</th><th>Owner</th><th>Outcome</th><th>Linked docs</th><th>Draft</th></tr>
         </thead>
         <tbody>
           @for (o of opportunities(); track o.id) {
@@ -60,6 +60,14 @@
               <td>{{ o.ownerDisplayName || '—' }}</td>
               <td>{{ o.outcome }}</td>
               <td>{{ o.linkedDocuments.length || 0 }}</td>
+              <td>
+                <div class="pi-fusion-actions">
+                  <button type="button" class="btn" (click)="draftFor(o, 'rfp')">Draft RFP</button>
+                  <button type="button" class="btn-secondary" (click)="draftFor(o, 'business-case')">Business case</button>
+                  <button type="button" class="btn-secondary" (click)="draftFor(o, 'proposal')">Proposal</button>
+                  <button type="button" class="btn-secondary" (click)="draftFor(o, 'battle-card')">Battle card</button>
+                </div>
+              </td>
             </tr>
           }
         </tbody>

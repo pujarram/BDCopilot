@@ -27,6 +27,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
     private readonly IPlannerSnapshotService _snapshots;
     private readonly IPipelineCapacityService _pipeline;
     private readonly IDocumentGeneratorService _generator;
+    private readonly IMultiApprovalService _multiApproval;
     private readonly TeamsBotSettings _settings;
     private readonly ILogger<TeamsChannelService> _logger;
 
@@ -39,6 +40,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
         IPlannerSnapshotService snapshots,
         IPipelineCapacityService pipeline,
         IDocumentGeneratorService generator,
+        IMultiApprovalService multiApproval,
         IOptions<TeamsBotSettings> settings,
         ILogger<TeamsChannelService> logger)
     {
@@ -50,6 +52,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
         _snapshots = snapshots;
         _pipeline = pipeline;
         _generator = generator;
+        _multiApproval = multiApproval;
         _settings = settings.Value;
         _logger = logger;
     }
@@ -145,6 +148,12 @@ public sealed class TeamsChannelService : ITeamsChannelService
             if (confirmReply is not null)
             {
                 return [confirmReply];
+            }
+
+            var approvalReply = await TryApprovalCommandAsync(text, userObjectId, ct);
+            if (approvalReply is not null)
+            {
+                return [approvalReply];
             }
 
             var generateOffer = TryOfferGenerateConfirm(text);
@@ -651,6 +660,10 @@ public sealed class TeamsChannelService : ITeamsChannelService
             • `generate proposal <solution>`
             • `generate battlecard vs <competitor>`
 
+            **Approvals**
+            • `approvals` — pending Legal/Sales reminders (Approve / Reject cards)
+            • After Teams generate, approval card is sent automatically
+
             **Project Intelligence**
             • `delayed` — overdue Planner tasks
             • `tasks for <name>` — filter by assignee
@@ -827,7 +840,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
                 ComplianceRegion = "EU"
             },
             ct);
-        return BuildGeneratorResultReply(doc, "/rfp");
+        return await BuildGeneratorResultWithApprovalsAsync(doc, "/generate/rfp", userObjectId, ct);
     }
 
     private async Task<TeamsReply> RunBusinessCaseGenerateAsync(string topic, string userObjectId, CancellationToken ct)
@@ -840,7 +853,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
                 ComplianceRegion = "EU"
             },
             ct);
-        return BuildGeneratorResultReply(doc, "/business-case");
+        return await BuildGeneratorResultWithApprovalsAsync(doc, "/generate/business-case", userObjectId, ct);
     }
 
     private async Task<TeamsReply> RunProposalGenerateAsync(string topic, string userObjectId, CancellationToken ct)
@@ -853,7 +866,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
                 ComplianceRegion = "EU"
             },
             ct);
-        return BuildGeneratorResultReply(doc, "/proposal");
+        return await BuildGeneratorResultWithApprovalsAsync(doc, "/generate/proposal", userObjectId, ct);
     }
 
     private async Task<TeamsReply> RunBattleCardGenerateAsync(string topic, string userObjectId, CancellationToken ct)
@@ -874,7 +887,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
                 ComplianceRegion = "EU"
             },
             ct);
-        return BuildGeneratorResultReply(doc, "/battle-card");
+        return await BuildGeneratorResultWithApprovalsAsync(doc, "/generate/battle-card", userObjectId, ct);
     }
 
     private TeamsReply BuildGeneratorResultReply(GeneratedDocument doc, string path)
@@ -889,6 +902,8 @@ public sealed class TeamsChannelService : ITeamsChannelService
         sb.AppendLine(preview);
         sb.AppendLine();
         sb.AppendLine($"Edit / export in the tab: {TabUrl(path)}");
+        sb.AppendLine();
+        sb.AppendLine("Legal + Sales approval started — tap **Approve** / **Reject** below, or type `approvals` later.");
 
         return Reply(
             sb.ToString(),
@@ -899,13 +914,128 @@ public sealed class TeamsChannelService : ITeamsChannelService
                 TabUrl(path)));
     }
 
+    private async Task<TeamsReply> BuildGeneratorResultWithApprovalsAsync(
+        GeneratedDocument doc,
+        string path,
+        string userObjectId,
+        CancellationToken ct)
+    {
+        MultiApprovalStatus? multi = null;
+        try
+        {
+            multi = await _multiApproval.StartAsync(
+                new StartMultiApprovalRequest
+                {
+                    GenerationId = doc.GenerationId,
+                    DocumentTitle = doc.Title,
+                    UserObjectId = userObjectId
+                },
+                ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not start multi-approval for Teams generate {Id}", doc.GenerationId);
+        }
+
+        var baseReply = BuildGeneratorResultReply(doc, path);
+        if (multi is null)
+        {
+            return baseReply;
+        }
+
+        var reviews = multi.Reviews.Select(r => (r.Role, r.Status)).ToList();
+        return new TeamsReply
+        {
+            Text = baseReply.Text,
+            AdaptiveCard = TeamsAdaptiveCardBuilder.ApprovalReminderCard(
+                doc.Title,
+                doc.GenerationId,
+                reviews,
+                TabUrl(path))
+        };
+    }
+
+    private async Task<TeamsReply?> TryApprovalCommandAsync(
+        string text,
+        string userObjectId,
+        CancellationToken ct)
+    {
+        var decide = Regex.Match(
+            text,
+            @"^(approve|reject)\s+([0-9a-fA-F-]{36})\s+as\s+(\w+)\s*$",
+            RegexOptions.IgnoreCase);
+        if (decide.Success)
+        {
+            var action = decide.Groups[1].Value;
+            var generationId = Guid.Parse(decide.Groups[2].Value);
+            var role = decide.Groups[3].Value;
+            var status = action.Equals("approve", StringComparison.OrdinalIgnoreCase) ? "Approved" : "Rejected";
+            try
+            {
+                var result = await _multiApproval.DecideAsync(
+                    new ReviewerDecisionRequest
+                    {
+                        GenerationId = generationId,
+                        Role = role,
+                        Status = status,
+                        UserObjectId = userObjectId,
+                        DisplayName = "Teams reviewer"
+                    },
+                    ct);
+                return new TeamsReply
+                {
+                    Text =
+                        $"**{role}** marked **{status}** for _{result.DocumentTitle}_.\n"
+                        + $"Overall: **{result.OverallStatus}**"
+                        + (result.IsFullyApproved ? " — export unlocked in Generate." : ".")
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Teams approval decide failed");
+                return new TeamsReply { Text = $"Could not record {status} for {role}: {ex.Message}" };
+            }
+        }
+
+        if (!text.Equals("approvals", StringComparison.OrdinalIgnoreCase)
+            && !text.Equals("pending approvals", StringComparison.OrdinalIgnoreCase)
+            && !text.Equals("remind approvals", StringComparison.OrdinalIgnoreCase)
+            && !text.Equals("approval reminders", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var pending = await _multiApproval.ListPendingAsync(5, ct);
+        if (pending.Count == 0)
+        {
+            return new TeamsReply { Text = "No pending Legal/Sales approvals. Start multi-approval from Generate after drafting." };
+        }
+
+        var first = pending[0];
+        var reviews = first.Reviews.Select(r => (r.Role, r.Status)).ToList();
+        var list = string.Join(
+            "\n",
+            pending.Select(p =>
+                $"• _{p.DocumentTitle}_ — {p.OverallStatus} (`{p.GenerationId:D}`)"));
+
+        return new TeamsReply
+        {
+            Text = $"**Pending approvals** ({pending.Count})\n{list}\n\nShowing card for the first draft — Approve / Reject as Legal or Sales.",
+            AdaptiveCard = TeamsAdaptiveCardBuilder.ApprovalReminderCard(
+                first.DocumentTitle,
+                first.GenerationId,
+                reviews,
+                TabUrl("/generate"))
+        };
+    }
+
     private static (string Kind, string Label, string Path) NormalizeGeneratorKind(string kindRaw)
     {
         var k = kindRaw.Replace(" ", "-").ToLowerInvariant();
-        if (k.StartsWith("business")) return ("business-case", "Business Case", "/business-case");
-        if (k.StartsWith("proposal")) return ("proposal", "Proposal", "/proposal");
-        if (k.StartsWith("battle")) return ("battlecard", "Battle Card", "/battle-card");
-        return ("rfp", "RFP", "/rfp");
+        if (k.StartsWith("business")) return ("business-case", "Business Case", "/generate/business-case");
+        if (k.StartsWith("proposal")) return ("proposal", "Proposal", "/generate/proposal");
+        if (k.StartsWith("battle")) return ("battlecard", "Battle Card", "/generate/battle-card");
+        return ("rfp", "RFP", "/generate/rfp");
     }
 
     private static (string Title, string Customer) SplitTopicAndCustomer(string topic)
@@ -924,14 +1054,18 @@ public sealed class TeamsChannelService : ITeamsChannelService
         var lower = text.Trim().ToLowerInvariant();
         var path = lower.StartsWith("library") ? "/library"
             : lower.StartsWith("search") ? "/search"
-            : lower.StartsWith("battle") || lower.StartsWith("competitive") ? "/battle-card"
-            : "/rfp";
+            : lower.StartsWith("battle") || lower.StartsWith("competitive") ? "/generate/battle-card"
+            : lower.StartsWith("business") ? "/generate/business-case"
+            : lower.StartsWith("proposal") ? "/generate/proposal"
+            : "/generate/rfp";
         var label = path switch
         {
             "/library" => "document library",
             "/search" => "knowledge search",
-            "/battle-card" => "Battle Card generator",
-            _ => "RFP generator / export"
+            "/generate/battle-card" => "Battle Card generator",
+            "/generate/business-case" => "Business Case generator",
+            "/generate/proposal" => "Proposal generator",
+            _ => "Generate workspace"
         };
         return
             $"For full **{label}**, open the BD Copilot tab:\n{TabUrl(path)}\n\n"
@@ -958,7 +1092,7 @@ public sealed class TeamsChannelService : ITeamsChannelService
         {
             return Reply(
                 "Usage: `battlecard vs Incumbent Chatbot` — or open the full generator:\n"
-                + TabUrl("/battle-card"));
+                + TabUrl("/generate/battle-card"));
         }
 
         _logger.LogInformation("Teams battlecard generate vs {Competitor}", competitor);
@@ -990,14 +1124,14 @@ public sealed class TeamsChannelService : ITeamsChannelService
             sb.AppendLine();
         }
 
-        sb.AppendLine($"Full card: {TabUrl("/battle-card")}");
+        sb.AppendLine($"Full card: {TabUrl("/generate/battle-card")}");
 
         var card = TeamsAdaptiveCardBuilder.BattleCardObjectionsCard(
             doc.Title,
             competitor,
             objections,
             winThemes,
-            TabUrl("/battle-card"));
+            TabUrl("/generate/battle-card"));
 
         return Reply(sb.ToString(), card);
     }

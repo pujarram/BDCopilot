@@ -42,20 +42,23 @@ export class CopilotPanel {
   protected readonly errorMessage = this.chat.errorMessage;
   protected readonly voiceSupported = this.speech.supported;
   protected readonly listening = this.speech.listening;
+  protected readonly speaking = this.speech.speaking;
 
   private lastAssistantText = '';
 
   constructor() {
     effect(() => {
+      const asking = this.chat.asking();
       const msgs = this.chat.messages();
       const last = msgs.length > 0 ? msgs[msgs.length - 1] : null;
       if (
-        last?.role === 'assistant'
+        !asking
+        && last?.role === 'assistant'
         && this.panelState.readAloud()
         && last.text !== this.lastAssistantText
       ) {
         this.lastAssistantText = last.text;
-        this.speech.speak(last.text);
+        this.speech.speak(last.text, 500);
       }
       queueMicrotask(() => this.scrollToBottom());
     });
@@ -63,6 +66,7 @@ export class CopilotPanel {
 
   protected useChip(prompt: string): void {
     this.draft.set('');
+    this.speech.stopSpeaking();
     this.chat.send(prompt);
   }
 
@@ -74,7 +78,7 @@ export class CopilotPanel {
 
   protected toggleReadAloud(): void {
     const next = !this.panelState.readAloud();
-    this.panelState.readAloud.set(next);
+    this.panelState.setReadAloud(next);
     if (!next) {
       this.speech.stopSpeaking();
     }
@@ -97,6 +101,7 @@ export class CopilotPanel {
     if (!text) return;
     this.draft.set('');
     this.voiceError.set(null);
+    this.speech.stopSpeaking();
     this.chat.send(text, this.teams.user().runningInTeams);
   }
 
@@ -118,6 +123,7 @@ export class CopilotPanel {
   protected clearChat(): void {
     this.chat.clear();
     this.lastAssistantText = '';
+    this.speech.stopSpeaking();
   }
 
   private scrollToBottom(): void {

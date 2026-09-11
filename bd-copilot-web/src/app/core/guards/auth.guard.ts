@@ -19,3 +19,13 @@ export const guestGuard: CanActivateFn = () => {
   }
   return router.createUrlTree(['/dashboard']);
 };
+
+/** Platform admin routes — redirects sellers to Home. */
+export const adminGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  if (auth.isLoggedIn() && auth.isAdmin()) {
+    return true;
+  }
+  return router.createUrlTree(['/dashboard']);
+};

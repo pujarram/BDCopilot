@@ -1,0 +1,50 @@
+<div class="panel-head">
+  <div>
+    <h2>Generate</h2>
+    <p>{{ activeDescription() }}</p>
+  </div>
+</div>
+
+<section class="generate-pursuit" aria-label="Pursuit context">
+  <div class="generate-pursuit__row">
+    <label class="generate-pursuit__label" for="gen-pursuit">Start from pursuit</label>
+    <select
+      id="gen-pursuit"
+      class="generate-pursuit__select"
+      [disabled]="loadingPursuits()"
+      [value]="context()?.opportunityId || ''"
+      (change)="onPursuitChange($event)"
+    >
+      <option value="">Ad hoc (no pursuit)</option>
+      @for (o of opportunities(); track o.id) {
+        <option [value]="o.id">{{ o.name }} — {{ o.client }} ({{ o.stage }})</option>
+      }
+    </select>
+    @if (dynamicsDeals().length) {
+      <span class="generate-pursuit__or">or CRM</span>
+      @for (d of dynamicsDeals(); track d.opportunityId) {
+        <button type="button" class="btn-secondary" (click)="applyDynamicsDeal(d.opportunityId)">
+          {{ d.client }}
+        </button>
+      }
+    }
+    @if (context()) {
+      <button type="button" class="btn-secondary" (click)="clearPursuit()">Clear</button>
+    }
+  </div>
+  @if (bannerLabel(); as label) {
+    <div class="generate-pursuit__banner">
+      <strong>{{ label }}</strong>
+      <p>Dynamics / pursuit notes will ground this draft. Prefer win-language for similar clients.</p>
+    </div>
+  }
+</section>
+
+<nav class="generate-types" aria-label="Document type">
+  <span class="generate-types__label">Type</span>
+  @for (docType of docTypes; track docType.path) {
+    <a [routerLink]="['/generate', docType.path]" routerLinkActive="active">{{ docType.label }}</a>
+  }
+</nav>
+
+<router-outlet />

@@ -17,6 +17,7 @@ public interface IMultiApprovalService
     Task<MultiApprovalStatus> StartAsync(StartMultiApprovalRequest request, CancellationToken ct = default);
     Task<MultiApprovalStatus> DecideAsync(ReviewerDecisionRequest request, CancellationToken ct = default);
     Task<MultiApprovalStatus?> GetStatusAsync(Guid generationId, CancellationToken ct = default);
+    Task<List<MultiApprovalStatus>> ListPendingAsync(int take = 10, CancellationToken ct = default);
 }
 
 public interface IDynamicsDealService

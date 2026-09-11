@@ -30,7 +30,9 @@ declare global {
 @Injectable({ providedIn: 'root' })
 export class SpeechService {
   readonly listening = signal(false);
+  readonly speaking = signal(false);
   readonly supported = signal(false);
+  readonly ttsSupported = signal(typeof window !== 'undefined' && 'speechSynthesis' in window);
 
   private recognition: SpeechRecognitionLike | null = null;
 
@@ -50,6 +52,8 @@ export class SpeechService {
       onError?.('Voice input is not supported in this browser. Try Chrome or Edge.');
       return;
     }
+
+    this.stopSpeaking();
 
     this.recognition.onresult = (event: SpeechRecognitionEventLike) => {
       const last = event.results[event.results.length - 1];
@@ -83,20 +87,30 @@ export class SpeechService {
     this.listening.set(false);
   }
 
-  speak(text: string): void {
-    if (!('speechSynthesis' in window) || !text.trim()) {
+  speak(text: string, delayMs = 400): void {
+    if (!this.ttsSupported() || !text.trim()) {
       return;
     }
     window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.rate = 1;
-    utter.lang = 'en-US';
-    window.speechSynthesis.speak(utter);
+    this.speaking.set(false);
+
+    window.setTimeout(() => {
+      if (!text.trim()) return;
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.rate = 1;
+      utter.lang = 'en-US';
+      utter.onstart = () => this.speaking.set(true);
+      utter.onend = () => this.speaking.set(false);
+      utter.onerror = () => this.speaking.set(false);
+      this.speaking.set(true);
+      window.speechSynthesis.speak(utter);
+    }, Math.max(0, delayMs));
   }
 
   stopSpeaking(): void {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
+    this.speaking.set(false);
   }
 }
